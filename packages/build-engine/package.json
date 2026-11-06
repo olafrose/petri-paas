@@ -9,17 +9,23 @@
 			"@petri/source": "./src/index.ts",
 			"types": "./dist/index.d.ts",
 			"default": "./dist/index.js"
+		},
+		"./testing": {
+			"@petri/source": "./test/zip-writer.ts"
 		}
 	},
 	"scripts": {
 		"build": "tsc -p tsconfig.build.json",
 		"typecheck": "tsc -p tsconfig.json"
 	},
-	"dependencies": {},
+	"dependencies": {
+		"yauzl": "^3.4.0"
+	},
 	"files": [
 		"dist"
 	],
 	"devDependencies": {
-		"@types/node": "^24.19.2"
+		"@types/node": "^24.19.2",
+		"@types/yauzl": "^3.4.0"
 	}
 }

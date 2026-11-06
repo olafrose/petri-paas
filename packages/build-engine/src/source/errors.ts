@@ -1,5 +1,6 @@
 export type SourceErrorCode =
 	| "invalid_url"
+	| "invalid_archive"
 	| "blocked_address"
 	| "dns_failed"
 	| "ref_not_found"

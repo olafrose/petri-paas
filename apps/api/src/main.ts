@@ -23,6 +23,7 @@ const app = await buildApp({
 	db,
 	auth,
 	jobs,
+	uploads: { uploadsDir: config.UPLOADS_DIR },
 	publicUrl: config.PUBLIC_URL,
 	trustProxy: config.TRUST_PROXY,
 	logger: { level: config.LOG_LEVEL },
