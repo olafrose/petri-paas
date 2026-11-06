@@ -374,8 +374,8 @@ security-critical and should not be hand-written. Better Auth provides
 password login with server-side sessions in PostgreSQL now, and generic
 OIDC (Authentik, Authelia, etc.) later through configuration only. The
 public gallery requires no login. Coding assistants use separately
-implemented scoped API keys (section 12.4). Its maturity is verified in
-phase 1 before other code depends on it.
+implemented scoped API keys (section 12.4). Verified in a spike in
+task 1.6 before other code depended on it.
 
 **Caddy as the edge proxy instead of Traefik.** Traefik's convenient
 mode discovers containers through the Docker socket, and the edge proxy

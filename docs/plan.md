@@ -105,6 +105,8 @@ document matches the schemas.
 -   Spike first: confirm Better Auth works with Fastify and Drizzle,
     password login and a generic OIDC provider. If it falls short,
     fall back to a small in-house session layer and record why.
+    **Result:** Better Auth 1.7 passed (password login, disabled
+    sign-up, rate limiting, OIDC redirect with PKCE); kept.
 -   Single owner account, created on first start from environment
     variables or a CLI command. No public sign-up.
 -   Server-side sessions, `HttpOnly`/`Secure`/`SameSite` cookies, origin

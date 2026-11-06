@@ -47,6 +47,7 @@ export const projectRoutes: FastifyPluginAsyncZod<{ db: Database }> = async (
 	app.post(
 		"/projects",
 		{
+			config: { access: { scope: "deploy:create" } },
 			schema: {
 				tags,
 				summary: "Create a project",
@@ -92,6 +93,7 @@ export const projectRoutes: FastifyPluginAsyncZod<{ db: Database }> = async (
 	app.get(
 		"/projects",
 		{
+			config: { access: { scope: "deploy:read" } },
 			schema: {
 				tags,
 				summary: "List projects, newest first",
@@ -110,6 +112,7 @@ export const projectRoutes: FastifyPluginAsyncZod<{ db: Database }> = async (
 	app.get(
 		"/projects/:id",
 		{
+			config: { access: { scope: "deploy:read" } },
 			schema: {
 				tags,
 				summary: "Get a project",
@@ -130,6 +133,7 @@ export const projectRoutes: FastifyPluginAsyncZod<{ db: Database }> = async (
 	app.patch(
 		"/projects/:id",
 		{
+			config: { access: { scope: "deploy:update" } },
 			schema: {
 				tags,
 				summary: "Update a project",
@@ -198,6 +202,7 @@ export const projectRoutes: FastifyPluginAsyncZod<{ db: Database }> = async (
 	app.delete(
 		"/projects/:id",
 		{
+			config: { access: { scope: "deploy:delete" } },
 			schema: {
 				tags,
 				summary: "Delete a project and all its deployments",
