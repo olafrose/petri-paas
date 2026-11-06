@@ -157,23 +157,145 @@ builds all three images.
 
 ------------------------------------------------------------------------
 
-## Phase 2 --- First deployment (outline)
+## Phase 2 --- First deployment
 
--   `packages/deployment-core`: deployment state machine with an explicit
-    transition table (including `STOPPED → DEPLOYING`, redeploy from
-    `EXPIRED`, retry from `FAILED`), fully unit-tested.
--   Deployment API endpoints and events.
--   Git source: URL validation (HTTPS only, no private addresses), fetch
-    of a fixed commit, record the resolved commit SHA.
--   ZIP upload: size limits, safe extraction, archives kept so they can be
-    redeployed.
--   Standalone buildkitd and `BuildKitProvider`; build logs stored as
-    files and referenced from the database.
--   Docker socket proxy and `DockerRuntimeProvider`: per-deployment
-    network, resource limits, dropped capabilities, non-root where
-    possible.
--   Health checks with grace period, retries and clear failure reasons.
--   Live progress via SSE.
+**Goal:** a deployment created through the API is fetched, built, run and
+health-checked, with live progress. No public URL yet (phase 3).
+
+**Safety while developing:** builds and apps run on the development
+machine and can reach the LAN until egress filtering lands in phase 3.
+Until then, deploy only your own repositories.
+
+### Defaults
+
+Configurable later; these are the starting values.
+
+  Setting                       Default
+  ----------------------------- -------------------------------------
+  Git clone timeout             2 minutes
+  Repository size limit         500 MB
+  ZIP upload limit              100 MB compressed, 500 MB extracted,
+                                20,000 files
+  Build timeout                 15 minutes
+  Container memory              512 MB
+  Container CPU                 1 core
+  Container processes           256
+  Health check                  HTTP GET `/`, any status below 500;
+                                30 s grace, every 2 s, 60 s timeout
+  Temporary deployment TTL      48 hours
+
+### 2.1 Deployment state machine
+
+-   `packages/deployment-core`: statuses and an explicit transition
+    table, as pure code with no I/O.
+-   Covers the normal path (queued → cloning → building → deploying →
+    health_check → ready), failure from any active step, stop/start,
+    redeploy from ready/stopped/failed/expired, and deletion.
+-   Every transition records a `deployment_events` row and publishes a
+    live event, in the same transaction as the status change.
+
+**Done when:** every allowed transition and a sample of forbidden ones
+are covered by unit tests; status changes go through one function.
+
+### 2.2 Deployment API
+
+-   `POST /deployments` (Git source), `GET /deployments`,
+    `GET /deployments/:id`, `GET /deployments/:id/events`.
+-   Creating a deployment writes the deployment, its first build and the
+    `deployment.run` job in one transaction (first real use of the
+    transactional enqueue from 1.7).
+-   Subdomain from project slug and deployment name, made unique;
+    lifecycle `temporary` (with `ttlHours`) or `permanent`.
+-   Request body as in architecture section 12.3; `project` accepts a
+    slug and creates the project if it doesn't exist (one call for
+    coding assistants).
+
+**Done when:** deployments can be created and listed with the right
+scopes, and a rolled-back request leaves no job behind.
+
+### 2.3 Git source
+
+-   HTTPS URLs only; the host must resolve to public addresses only
+    (checked again right before fetching, against DNS rebinding).
+-   Shallow fetch of the requested branch, tag or commit; record the
+    resolved commit SHA on the build.
+-   Time and size limits; no Git hooks, no submodules, no credential
+    prompts.
+-   A fresh workspace directory per build, removed afterwards.
+
+**Done when:** tests cover allowed/blocked URLs (private ranges,
+localhost, link-local, IPv6 forms, redirects), and a public repository
+is fetched at a pinned commit.
+
+### 2.4 ZIP upload
+
+-   `POST /deployments/upload` (multipart): archive plus the same
+    settings as 2.2.
+-   Rejects path traversal, absolute paths, symlinks and device files;
+    enforces size and file-count limits while extracting (zip bombs).
+-   Archives are kept in an uploads volume so deployments can be rebuilt.
+
+**Done when:** a set of malicious test archives is rejected and a valid
+one deploys.
+
+### 2.5 Builds with BuildKit
+
+-   Rootless `buildkitd` as its own service (dev and production
+    Compose). Verified on the dev machine: build steps run as an
+    unprivileged user on the host.
+-   `BuildKitProvider`: Dockerfile builds via `buildctl`; the image is
+    exported and loaded into Docker; optional build directory and build
+    arguments.
+-   Build logs streamed to a file per build (`builds.log_path`) and to
+    live events; secrets never written to logs.
+-   Build timeout; failed builds keep their log.
+
+**Done when:** a sample app with a Dockerfile builds; a failing
+Dockerfile ends the deployment as `failed` with the error and log kept.
+
+### 2.6 Runtime with Docker
+
+-   Docker socket proxy: the worker reaches Docker only through it,
+    limited to the containers, images and networks API.
+-   `DockerRuntimeProvider`: one network per deployment; container with
+    the resource limits above, all capabilities dropped,
+    `no-new-privileges`, no published ports, labels linking it to the
+    deployment.
+-   Idempotent: a retried job finds and reuses or replaces its own
+    container instead of creating a duplicate.
+
+**Done when:** a built image runs with the limits applied (checked via
+the Docker API in tests), and a retried job doesn't duplicate containers.
+
+### 2.7 Health checks and the deployment job
+
+-   `deployment.run` job: fetch → build → create container → start →
+    health check → `ready`, recording each step.
+-   The worker joins the deployment's network only to probe it.
+-   On failure: record the failed step and reason, keep logs, remove
+    what the attempt created.
+
+**Done when:** a working app reaches `ready`; an app that never answers,
+crashes on start or listens on the wrong port fails with a clear reason.
+
+### 2.8 Live progress and logs
+
+-   `GET /deployments/:id/events/stream`: Server-Sent Events, replaying
+    stored events first (`Last-Event-ID`) and then live ones.
+-   `GET /deployments/:id/logs`: build log, and runtime logs from Docker.
+
+**Done when:** a client connecting mid-deployment sees every event
+exactly once, in order.
+
+### 2.9 Stop, start and delete
+
+-   `POST /deployments/:id/stop`, `POST /deployments/:id/start`,
+    `DELETE /deployments/:id` (removes container, network and image;
+    keeps history unless the project is deleted).
+-   Redeploy and automatic expiry follow in phase 5.
+
+**Done when:** each action works from the matching states and is
+refused from the others.
 
 **Result:** a project builds and runs locally (no public URL yet).
 
