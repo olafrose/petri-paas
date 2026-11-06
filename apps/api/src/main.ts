@@ -1,13 +1,26 @@
 import { loadConfigOrExit } from "@petri/config";
 import { createDatabase, migrateDatabase } from "@petri/database";
 import { buildApp } from "./app.ts";
-import { apiConfigSchema } from "./config.ts";
+import { createAuth } from "./auth/auth.ts";
+import { apiConfigSchema, oidcOptions } from "./config.ts";
 
 const config = loadConfigOrExit(apiConfigSchema);
 const db = createDatabase(config.DATABASE_URL);
 await migrateDatabase(db);
 
-const app = await buildApp({ db, logger: { level: config.LOG_LEVEL } });
+const auth = createAuth({
+	db,
+	publicUrl: config.PUBLIC_URL,
+	secret: config.AUTH_SECRET,
+	oidc: oidcOptions(config),
+});
+const app = await buildApp({
+	db,
+	auth,
+	publicUrl: config.PUBLIC_URL,
+	trustProxy: config.TRUST_PROXY,
+	logger: { level: config.LOG_LEVEL },
+});
 
 for (const signal of ["SIGINT", "SIGTERM"] as const) {
 	process.once(signal, async () => {

@@ -13,6 +13,7 @@ export const healthRoutes: FastifyPluginAsyncZod<{ db: Database }> = async (
 	app.get(
 		"/health",
 		{
+			config: { access: "public" },
 			schema: {
 				tags: ["system"],
 				summary: "Service health",

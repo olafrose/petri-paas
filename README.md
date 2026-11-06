@@ -43,6 +43,34 @@ Commands:
 | `pnpm db:migrate` | Apply pending migrations to `DATABASE_URL` |
 | `pnpm dev:api`   | Run the API with reload on change (port 4000) |
 
+## Authentication
+
+The admin panel has a single owner and no sign-up. Create the owner, or
+set a new password (which also signs out all sessions):
+
+```bash
+pnpm owner:set --email you@example.com --name "Your Name"
+```
+
+The password is prompted for (hidden), or read from stdin when piped.
+
+Access to the API:
+
+| Who                  | How                                              | Can use                         |
+| -------------------- | ------------------------------------------------ | ------------------------------- |
+| Anyone               | —                                                | health, sign-in, API docs       |
+| The owner            | session cookie from signing in                   | everything                      |
+| Coding assistants    | `Authorization: Bearer petri_…` (API key)        | routes allowed by the key's scopes |
+
+API keys are created by the owner (`POST /api/v1/api-keys`) with the
+scopes `deploy:read`, `deploy:create`, `deploy:update` and
+`deploy:delete`. Keys cannot manage keys.
+
+Sign-in through an OpenID Connect provider such as Authentik can be
+enabled later with the `OIDC_*` variables in `.env.example`.
+
+## API documentation
+
 With the API running, the interactive API documentation is at
 <http://localhost:4000/api/v1/docs> and the OpenAPI document at
 `/api/v1/docs/json`.

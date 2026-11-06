@@ -1,7 +1,10 @@
 import { drizzle, type NodePgDatabase } from "drizzle-orm/node-postgres";
 import { migrate } from "drizzle-orm/node-postgres/migrator";
 import pg from "pg";
-import * as schema from "./schema.ts";
+import * as authSchema from "./auth-schema.ts";
+import * as appSchema from "./schema.ts";
+
+const schema = { ...appSchema, ...authSchema };
 
 export type Database = NodePgDatabase<typeof schema> & { $client: pg.Pool };
 

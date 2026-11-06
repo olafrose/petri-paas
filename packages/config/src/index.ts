@@ -48,7 +48,7 @@ export function loadConfig<Schema extends z.ZodObject>(
 	throw new ConfigError(
 		result.error.issues.map((issue) => {
 			const name = issue.path.join(".") || "(root)";
-			return env[name] === undefined
+			return issue.code === "invalid_type" && env[name] === undefined
 				? `${name}: required`
 				: `${name}: ${issue.message}`;
 		}),

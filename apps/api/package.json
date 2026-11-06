@@ -8,7 +8,8 @@
 		"build": "tsc -p tsconfig.build.json",
 		"typecheck": "tsc -p tsconfig.json",
 		"dev": "node --conditions=@petri/source --env-file-if-exists=../../.env --watch src/main.ts",
-		"start": "node dist/main.js"
+		"start": "node dist/main.js",
+		"owner:set": "node --conditions=@petri/source --env-file-if-exists=../../.env src/cli/set-owner.ts"
 	},
 	"dependencies": {
 		"@fastify/swagger": "^9.9.3",
@@ -16,6 +17,7 @@
 		"@petri/config": "workspace:*",
 		"@petri/contracts": "workspace:*",
 		"@petri/database": "workspace:*",
+		"better-auth": "^1.7.18",
 		"drizzle-orm": "0.45.4",
 		"fastify": "^5.12.8",
 		"fastify-type-provider-zod": "^7.0.0",
