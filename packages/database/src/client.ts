@@ -4,7 +4,7 @@ import pg from "pg";
 import * as authSchema from "./auth-schema.ts";
 import * as appSchema from "./schema.ts";
 
-const schema = { ...appSchema, ...authSchema };
+export const schema = { ...appSchema, ...authSchema };
 
 export type Database = NodePgDatabase<typeof schema> & { $client: pg.Pool };
 

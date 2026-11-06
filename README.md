@@ -42,6 +42,10 @@ Commands:
 | `pnpm db:generate` | Generate a SQL migration after changing the schema |
 | `pnpm db:migrate` | Apply pending migrations to `DATABASE_URL` |
 | `pnpm dev:api`   | Run the API with reload on change (port 4000) |
+| `pnpm dev:worker` | Run the background worker with reload on change |
+
+The API applies database migrations on startup; start it before the
+worker on a fresh database.
 
 ## Authentication
 

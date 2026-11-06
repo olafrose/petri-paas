@@ -20,7 +20,8 @@
 		"db:generate": "pnpm --filter @petri/database db:generate",
 		"db:migrate": "pnpm --filter @petri/database db:migrate",
 		"dev:api": "pnpm --filter @petri/api dev",
-		"owner:set": "pnpm --filter @petri/api owner:set"
+		"owner:set": "pnpm --filter @petri/api owner:set",
+		"dev:worker": "pnpm --filter @petri/worker dev"
 	},
 	"devDependencies": {
 		"@biomejs/biome": "2.6.5",

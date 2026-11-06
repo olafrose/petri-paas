@@ -1,0 +1,22 @@
+{
+	"name": "@petri/worker",
+	"version": "0.0.0",
+	"private": true,
+	"type": "module",
+	"license": "AGPL-3.0-or-later",
+	"scripts": {
+		"build": "tsc -p tsconfig.build.json",
+		"typecheck": "tsc -p tsconfig.json",
+		"dev": "node --conditions=@petri/source --env-file-if-exists=../../.env --watch src/main.ts",
+		"start": "node dist/main.js"
+	},
+	"dependencies": {
+		"@petri/config": "workspace:*",
+		"@petri/database": "workspace:*",
+		"@petri/jobs": "workspace:*",
+		"pino": "^10.4.0"
+	},
+	"devDependencies": {
+		"@types/node": "^24.19.2"
+	}
+}

@@ -1,0 +1,29 @@
+{
+	"name": "@petri/jobs",
+	"version": "0.0.0",
+	"private": true,
+	"type": "module",
+	"license": "AGPL-3.0-or-later",
+	"exports": {
+		".": {
+			"@petri/source": "./src/index.ts",
+			"types": "./dist/index.d.ts",
+			"default": "./dist/index.js"
+		}
+	},
+	"scripts": {
+		"build": "tsc -p tsconfig.build.json",
+		"typecheck": "tsc -p tsconfig.json"
+	},
+	"dependencies": {
+		"@petri/database": "workspace:*",
+		"pg": "^8.23.1",
+		"pg-boss": "^12.38.1",
+		"zod": "4.6.7"
+	},
+	"devDependencies": {
+		"@types/node": "^24.19.2",
+		"@types/pg": "8.23.1",
+		"drizzle-orm": "0.45.4"
+	}
+}
