@@ -671,6 +671,11 @@ NPM VM  --(LAN, HTTP)-->  petri. host: edge proxy  -->  Docker network  -->  con
 -   The edge proxy answers unknown hostnames with an error and never
     falls through to another service.
 -   The edge proxy trusts `X-Forwarded-*` headers only from the NPM VM.
+-   The same applies to the web interface: the API takes the client
+    address for login rate limiting from `X-Forwarded-For`, which NPM
+    sets and the web app passes on. If anything other than NPM could
+    reach the web port, it could choose its own address and evade the
+    limit.
 
 Traffic between NPM and the edge proxy is plain HTTP on the LAN in the
 MVP. Encrypting this hop is a later hardening option.
