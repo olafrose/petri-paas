@@ -1,12 +1,8 @@
 import pg from "pg";
 import type { TestProject } from "vitest/node";
 import { createDatabase, migrateDatabase } from "../src/client.ts";
-
-declare module "vitest" {
-	export interface ProvidedContext {
-		databaseUrl: string;
-	}
-}
+// Loads the ProvidedContext type for `project.provide`.
+import type {} from "./helpers.ts";
 
 const DEFAULT_URL = "postgres://petri:petri@localhost:5432/petri";
 
