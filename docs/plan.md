@@ -125,8 +125,10 @@ working.
 
 -   `apps/worker`: pg-boss setup, graceful shutdown, job retry
     defaults.
--   A placeholder job enqueued by the API in the same transaction as a
-    database write, to prove the pattern.
+-   A placeholder job enqueued in the same transaction as a database
+    write, to prove the pattern. (Done in `packages/jobs` tests with a
+    `system.ping` job; the API's first real job is the deployment job in
+    phase 2.)
 -   `LISTEN/NOTIFY` channel from worker to API for live events.
 
 **Done when:** restarting the worker mid-job loses no jobs, and the
