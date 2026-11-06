@@ -1,0 +1,25 @@
+{
+	"name": "@petri/build-engine",
+	"version": "0.0.0",
+	"private": true,
+	"type": "module",
+	"license": "AGPL-3.0-or-later",
+	"exports": {
+		".": {
+			"@petri/source": "./src/index.ts",
+			"types": "./dist/index.d.ts",
+			"default": "./dist/index.js"
+		}
+	},
+	"scripts": {
+		"build": "tsc -p tsconfig.build.json",
+		"typecheck": "tsc -p tsconfig.json"
+	},
+	"dependencies": {},
+	"files": [
+		"dist"
+	],
+	"devDependencies": {
+		"@types/node": "^24.19.2"
+	}
+}
