@@ -395,7 +395,10 @@ the runtime and allows moving builds to a separate VM later (section
 
 **Tooling.** pnpm workspaces for the monorepo, Biome for linting and
 formatting (one fast tool instead of ESLint and Prettier), Vitest for
-tests, GitHub Actions for CI.
+tests, GitHub Actions for CI. Type-checking uses TypeScript 7, the
+native compiler, which is much faster and lighter than earlier versions;
+a package whose tooling still needs the TypeScript 6 compiler API can
+pin TypeScript 6 locally.
 
 ------------------------------------------------------------------------
 
