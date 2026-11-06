@@ -40,6 +40,18 @@ describe("loadConfig", () => {
 		}
 	});
 
+	test("treats empty values as unset", () => {
+		expect(
+			loadConfig(schema, {
+				DATABASE_URL: "postgres://localhost/petri",
+				LOG_LEVEL: "",
+			}).LOG_LEVEL,
+		).toBe("info");
+		expect(() => loadConfig(schema, { DATABASE_URL: "" })).toThrow(
+			/DATABASE_URL: required/,
+		);
+	});
+
 	test("rejects non-PostgreSQL URLs", () => {
 		expect(() =>
 			loadConfig(databaseSchema, { DATABASE_URL: "mysql://localhost/petri" }),

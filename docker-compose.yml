@@ -1,0 +1,109 @@
+# The full petri. stack: docker compose up -d --build
+#
+# Reads settings from the environment or a .env file next to this file
+# (see .env.example, "Docker Compose" section). For local development
+# without containers, use infrastructure/compose/dev.yml instead.
+name: petri
+
+x-service-defaults: &service-defaults
+  restart: unless-stopped
+  networks: [internal]
+  security_opt: ["no-new-privileges:true"]
+  cap_drop: [ALL]
+  read_only: true
+  tmpfs: [/tmp]
+
+x-database-env: &database-env
+  NODE_ENV: production
+  LOG_LEVEL: ${LOG_LEVEL:-info}
+  DATABASE_URL: postgres://petri:${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD}@postgres:5432/petri
+
+services:
+  postgres:
+    image: postgres:18-alpine
+    restart: unless-stopped
+    networks: [internal]
+    environment:
+      POSTGRES_USER: petri
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD}
+      POSTGRES_DB: petri
+    volumes:
+      - postgres-data:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U petri -d petri"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  api:
+    <<: *service-defaults
+    build:
+      context: .
+      dockerfile: infrastructure/docker/Dockerfile
+      target: api
+    image: petri-api
+    environment:
+      <<: *database-env
+      PUBLIC_URL: ${PUBLIC_URL:?Set PUBLIC_URL}
+      AUTH_SECRET: ${AUTH_SECRET:?Set AUTH_SECRET}
+      # Requests arrive through the web container on the internal network.
+      TRUST_PROXY: ${PETRI_SUBNET:-172.31.250.0/24}
+      OIDC_ISSUER: ${OIDC_ISSUER:-}
+      OIDC_CLIENT_ID: ${OIDC_CLIENT_ID:-}
+      OIDC_CLIENT_SECRET: ${OIDC_CLIENT_SECRET:-}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:4000/api/v1/health"]
+      interval: 10s
+      timeout: 3s
+      retries: 10
+      start_period: 10s
+
+  worker:
+    <<: *service-defaults
+    build:
+      context: .
+      dockerfile: infrastructure/docker/Dockerfile
+      target: worker
+    image: petri-worker
+    environment:
+      <<: *database-env
+    depends_on:
+      # The API applies database migrations on startup.
+      api:
+        condition: service_healthy
+    stop_grace_period: 40s
+
+  web:
+    <<: *service-defaults
+    build:
+      context: .
+      dockerfile: infrastructure/docker/Dockerfile
+      target: web
+    image: petri-web
+    tmpfs: [/tmp, /app/apps/web/.next/cache]
+    environment:
+      API_INTERNAL_URL: http://api:4000
+    ports:
+      # The only published port. Bind to the address NPM reaches.
+      - "${WEB_BIND:-127.0.0.1}:${WEB_PORT:-3000}:3000"
+    depends_on:
+      api:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:3000/login"]
+      interval: 10s
+      timeout: 3s
+      retries: 10
+      start_period: 10s
+
+networks:
+  internal:
+    ipam:
+      config:
+        - subnet: ${PETRI_SUBNET:-172.31.250.0/24}
+
+volumes:
+  postgres-data:

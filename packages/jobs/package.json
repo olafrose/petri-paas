@@ -25,5 +25,8 @@
 		"@types/node": "^24.19.2",
 		"@types/pg": "8.23.1",
 		"drizzle-orm": "0.45.4"
-	}
+	},
+	"files": [
+		"dist"
+	]
 }

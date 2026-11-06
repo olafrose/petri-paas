@@ -41,6 +41,16 @@ describe("apiConfigSchema", () => {
 		}
 	});
 
+	test("empty OIDC variables (as passed by Docker Compose) mean no OIDC", () => {
+		const config = loadConfig(apiConfigSchema, {
+			...base,
+			OIDC_ISSUER: "",
+			OIDC_CLIENT_ID: "",
+			OIDC_CLIENT_SECRET: "",
+		});
+		expect(oidcOptions(config)).toBeUndefined();
+	});
+
 	test("requires a long enough secret", () => {
 		expect(() =>
 			loadConfig(apiConfigSchema, { ...base, AUTH_SECRET: "short" }),

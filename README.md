@@ -53,6 +53,20 @@ panel.
 The API applies database migrations on startup; start it before the
 worker on a fresh database.
 
+## Running the full stack in containers
+
+```bash
+cp .env.example .env    # set POSTGRES_PASSWORD, AUTH_SECRET, PUBLIC_URL
+docker compose up -d --build
+docker compose exec api node dist/cli/set-owner.js --email you@example.com
+```
+
+This builds the `api`, `worker` and `web` images from
+`infrastructure/docker/Dockerfile` and starts them with PostgreSQL. Only
+the web app is published (`WEB_BIND:WEB_PORT`, default
+`127.0.0.1:3000`); the API and database stay on the internal network.
+Containers run as an unprivileged user with read-only file systems.
+
 ## Authentication
 
 The admin panel has a single owner and no sign-up. Create the owner, or

@@ -32,15 +32,20 @@ export class ConfigError extends Error {
 }
 
 /**
- * Parses environment variables against a schema.
+ * Parses environment variables against a schema. Empty values count as
+ * unset, so `NAME=` in a .env file or Compose's `${NAME:-}` fall back to
+ * the default (or are reported as required).
  *
  * Error messages name the variable and the problem but never include its
  * value, because values may be secrets.
  */
 export function loadConfig<Schema extends z.ZodObject>(
 	schema: Schema,
-	env: Record<string, string | undefined> = process.env,
+	rawEnv: Record<string, string | undefined> = process.env,
 ): z.infer<Schema> {
+	const env = Object.fromEntries(
+		Object.entries(rawEnv).filter(([, value]) => value !== ""),
+	);
 	const result = schema.safeParse(env, { reportInput: false });
 	if (result.success) {
 		return result.data;
