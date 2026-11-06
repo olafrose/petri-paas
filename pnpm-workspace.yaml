@@ -1,3 +1,8 @@
 packages:
   - apps/*
   - packages/*
+
+# Dependencies allowed to run install scripts. pnpm blocks all others.
+allowBuilds:
+  # Its postinstall only verifies the platform binary. Used by drizzle-kit.
+  esbuild: true

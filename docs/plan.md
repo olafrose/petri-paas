@@ -79,8 +79,8 @@ connects with the validated configuration.
 ### 1.4 Database
 
 -   `packages/database`: Drizzle schema and migrations for `projects`,
-    `deployments`, `builds`, `deployment_events`, `api_keys`, plus the
-    tables Better Auth needs.
+    `deployments`, `builds`, `deployment_events` and `api_keys`. The
+    tables Better Auth needs are added in 1.6, after the spike.
 -   Projects get a `featured_deployment_id` (which deployment the gallery
     shows) and a `visibility` field.
 -   Migration command used by both development and production.
