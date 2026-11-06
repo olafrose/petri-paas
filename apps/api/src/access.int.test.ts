@@ -19,6 +19,7 @@ describe("route protection", () => {
 		for (const url of publicRoutes) {
 			expect(
 				url === "/api/v1/health" ||
+					url === "/api/v1/gallery" ||
 					url === "/api/v1/auth/*" ||
 					url.startsWith("/api/v1/docs"),
 				`unexpected public route ${url}`,

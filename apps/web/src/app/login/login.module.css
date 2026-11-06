@@ -1,0 +1,47 @@
+.form {
+	max-width: 22rem;
+	display: flex;
+	flex-direction: column;
+	gap: var(--space-3);
+}
+
+.form h1 {
+	font-family: var(--font-hand);
+	font-weight: normal;
+	margin: 0;
+}
+
+.form label {
+	display: flex;
+	flex-direction: column;
+	gap: var(--space-1);
+	font-size: 0.9rem;
+}
+
+.form input {
+	font: inherit;
+	padding: var(--space-2);
+	border: 1px solid var(--paper-line);
+	border-radius: var(--radius);
+	background: var(--paper-raised);
+	color: var(--ink);
+}
+
+.form button {
+	font: inherit;
+	padding: var(--space-2) var(--space-3);
+	border: none;
+	border-radius: var(--radius);
+	background: var(--ink);
+	color: var(--paper);
+	cursor: pointer;
+}
+
+.form button:disabled {
+	opacity: 0.6;
+}
+
+.error {
+	color: var(--danger);
+	margin: 0;
+}

@@ -43,6 +43,12 @@ Commands:
 | `pnpm db:migrate` | Apply pending migrations to `DATABASE_URL` |
 | `pnpm dev:api`   | Run the API with reload on change (port 4000) |
 | `pnpm dev:worker` | Run the background worker with reload on change |
+| `pnpm dev:web`   | Run the web app (gallery and admin panel, port 3000) |
+
+The web app forwards `/api/v1/*` to the API (`API_INTERNAL_URL`, default
+`http://localhost:4000`), so the browser only ever talks to one origin.
+Open <http://localhost:3000> for the gallery and `/admin` for the admin
+panel.
 
 The API applies database migrations on startup; start it before the
 worker on a fresh database.

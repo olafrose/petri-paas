@@ -1,0 +1,9 @@
+.bar {
+	display: flex;
+	justify-content: space-between;
+	align-items: center;
+	gap: var(--space-3);
+	color: var(--ink-soft);
+	font-size: 0.875rem;
+	margin-bottom: var(--space-4);
+}

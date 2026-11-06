@@ -14,6 +14,7 @@ import type { Auth } from "./auth/auth.ts";
 import { registerErrorHandling } from "./errors.ts";
 import { apiKeyRoutes } from "./routes/api-keys.ts";
 import { authRoutes } from "./routes/auth.ts";
+import { galleryRoutes } from "./routes/gallery.ts";
 import { healthRoutes } from "./routes/health.ts";
 import { projectRoutes } from "./routes/projects.ts";
 
@@ -74,6 +75,7 @@ export async function buildApp({
 	const prefix = "/api/v1";
 	await app.register(healthRoutes, { prefix, db });
 	await app.register(authRoutes, { prefix, auth, publicUrl });
+	await app.register(galleryRoutes, { prefix, db });
 	await app.register(projectRoutes, { prefix, db });
 	await app.register(apiKeyRoutes, { prefix, db });
 
