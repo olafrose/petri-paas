@@ -160,11 +160,10 @@ flowchart TB
     subgraph Petri["petri. Control Plane"]
         Web["Web UI"]
         API["REST API"]
-        Auth["API Key Authentication"]
+        Auth["Session / API Key Authentication"]
         Orchestrator["Deployment Orchestrator"]
         Worker["Background Worker"]
-        DB[("PostgreSQL")]
-        Redis[("Redis / BullMQ")]
+        DB[("PostgreSQL + pg-boss")]
     end
 
     subgraph Build["Build Environment"]
@@ -189,8 +188,7 @@ flowchart TB
     API --> Auth
     Auth --> Orchestrator
     Orchestrator --> DB
-    Orchestrator --> Redis
-    Redis --> Worker
+    DB --> Worker
     Worker --> Source
     Worker --> BuildKit
     Worker --> Buildpacks
@@ -238,10 +236,9 @@ separate physical machines in the MVP.
   Edge Proxy                          Routes `*.app` hostnames to
                                       application containers
 
-  PostgreSQL                          Persistent application data
-
-  Redis / BullMQ                      Job queue and asynchronous
-                                      coordination
+  PostgreSQL                          Persistent application data, job
+                                      queue (pg-boss) and change
+                                      notifications
 
   Docker Engine                       Runs application containers
 
@@ -256,26 +253,36 @@ even if they initially run on the same host.
 
 ## 5. Technology stack
 
-The proposed implementation uses TypeScript across the application.
+The implementation uses TypeScript on Node.js across the application.
+The reasons for each choice are recorded in section 5.2.
 
   -----------------------------------------------------------------------
   Layer                   Technology              Purpose
   ----------------------- ----------------------- -----------------------
   Frontend                Next.js + TypeScript    Web interface
 
-  Backend                 NestJS + TypeScript     REST API and
+  Backend                 Fastify + Zod           REST API and
                                                   orchestration
 
   Database                PostgreSQL              Persistent state
 
-  ORM                     Prisma                  Database access and
+  ORM                     Drizzle                 Database access and
                                                   migrations
 
-  Queue                   Redis + BullMQ          Background jobs
+  Queue                   pg-boss (on             Background jobs
+                          PostgreSQL)             
+
+  Authentication          Better Auth             Admin login, sessions,
+                                                  later OIDC
+
+  Edge proxy              Caddy                   Preview routing
 
   Container runtime       Docker Engine API       Container lifecycle
+                          (dockerode, via a       
+                          socket proxy)           
 
-  Image building          BuildKit                Dockerfile builds
+  Image building          BuildKit (standalone    Dockerfile builds
+                          buildkitd)              
 
   Automatic builds        Paketo Buildpacks or    Applications without
                           another compatible      Dockerfiles
@@ -327,7 +334,68 @@ The first implementations are:
 -   `DockerRuntimeProvider`
 -   `BuildKitProvider`
 -   `BuildpackProvider`
--   `EdgeProxyProvider` (for the edge proxy chosen in section 19)
+-   `CaddyEdgeProxyProvider`
+
+### 5.2 Stack rationale
+
+**TypeScript everywhere.** One language for web, API and worker lets
+`packages/contracts` define request and response shapes once and share
+them. The Docker Engine API has a mature Node client (dockerode).
+
+**Fastify + Zod instead of NestJS.** Zod schemas in `packages/contracts`
+serve as runtime validation, TypeScript types and the OpenAPI document
+from a single source. NestJS's main benefit, dependency injection, is
+not needed: the adapters in 5.1 are passed in through constructors.
+Fastify also starts faster and uses less memory, which matters on the
+4 GB development machine. Trade-off: less built-in structure, so the
+module layout is enforced by convention.
+
+**Next.js for the web app.** The public gallery is server-rendered, so
+it loads fast on phones and produces proper link previews when a preview
+is shared. The gallery and the admin panel live in one app. Trade-off:
+the Next.js dev server is the heaviest process in development.
+
+**PostgreSQL + pg-boss instead of Redis + BullMQ.** Job volume is tiny
+(a few deployments per day), so a separate Redis adds a stateful service
+to run, secure and back up without a real benefit. pg-boss stores jobs
+in PostgreSQL, which means a deployment record and its job are created
+in the same transaction and can never get out of sync. pg-boss provides
+retries, cron schedules (cleanup, reconciliation) and singleton jobs.
+Live status updates use PostgreSQL `LISTEN/NOTIFY` and are forwarded to
+the browser as SSE.
+
+**Drizzle instead of Prisma.** The schema is plain TypeScript with no
+code-generation step, queries stay close to SQL, and it shares the same
+`pg` connection pool as pg-boss, which is what makes the shared
+transaction above straightforward.
+
+**Better Auth for the admin panel.** Login and session handling are
+security-critical and should not be hand-written. Better Auth provides
+password login with server-side sessions in PostgreSQL now, and generic
+OIDC (Authentik, Authelia, etc.) later through configuration only. The
+public gallery requires no login. Coding assistants use separately
+implemented scoped API keys (section 12.4). Its maturity is verified in
+phase 1 before other code depends on it.
+
+**Caddy as the edge proxy instead of Traefik.** Traefik's convenient
+mode discovers containers through the Docker socket, and the edge proxy
+is the one component reachable from the LAN, so it must not hold the
+socket. Caddy is configured through its admin API instead: petri. pushes
+routes, and the full configuration can be regenerated from the database
+at any time. The admin API listens only on an internal network.
+
+**Docker socket proxy.** Only the worker talks to Docker, and only
+through a socket proxy that allows the API calls it needs. This limits
+the damage of a compromised worker (section 15).
+
+**Standalone buildkitd.** Running BuildKit as its own service, rather
+than through the host's Docker daemon, keeps untrusted builds apart from
+the runtime and allows moving builds to a separate VM later (section
+16.2) without code changes.
+
+**Tooling.** pnpm workspaces for the monorepo, Biome for linting and
+formatting (one fast tool instead of ESLint and Prettier), Vitest for
+tests, GitHub Actions for CI.
 
 ------------------------------------------------------------------------
 
@@ -340,12 +408,12 @@ adapters consistent.
 petri/
 ├── apps/
 │   ├── web/                  # Next.js frontend
-│   ├── api/                  # NestJS REST API
+│   ├── api/                  # Fastify REST API
 │   └── worker/               # Background job processing
 │
 ├── packages/
 │   ├── contracts/            # Shared API and domain types
-│   ├── database/             # Prisma schema and migrations
+│   ├── database/             # Drizzle schema and migrations
 │   ├── build-engine/         # Build orchestration and providers
 │   ├── runtime/              # Container runtime abstraction
 │   ├── proxy-manager/        # Edge proxy route management
@@ -926,7 +994,7 @@ Particular care is needed around:
 
 -   Router and firewall administration interfaces.
 -   The NPM VM, in particular its administration interface.
--   PostgreSQL and Redis.
+-   PostgreSQL.
 -   Docker Engine APIs.
 -   Other homelab services.
 -   Cloud metadata endpoints where applicable.
@@ -964,8 +1032,9 @@ control plane merely because both run on the same Docker host.
 
 ### 16.1 MVP topology
 
-The first installation runs petri. on one dedicated host. NPM stays on
-its existing, separate VM:
+The first installation runs petri. on one dedicated host: an
+x86-64-v3 virtual machine on Proxmox. NPM stays on its existing,
+separate VM:
 
 ``` text
 NPM VM (existing)
@@ -976,10 +1045,10 @@ petri. Host
 ├── Web
 ├── API
 ├── Worker
+├── Docker socket proxy
 ├── PostgreSQL
-├── Redis
 ├── BuildKit
-└── Edge proxy
+└── Edge proxy (Caddy)
      │
      └── Application containers
 ```
@@ -987,8 +1056,9 @@ petri. Host
 NPM remains an existing external dependency and is not recreated or
 managed by petri.
 
-The development machine is separate from the petri. host and is not
-part of this topology.
+The development machine (arm64) is separate from the petri. host and is
+not part of this topology. Production images are built for
+`linux/amd64`.
 
 The application services should be managed through Docker Compose.
 
@@ -1000,8 +1070,7 @@ For stronger isolation and scalability:
 Control Plane Host
 ├── Web
 ├── API
-├── PostgreSQL
-└── Redis
+└── PostgreSQL
 
 Build Host / VM
 └── Isolated BuildKit workers
@@ -1053,13 +1122,15 @@ losing deployment state.
 ### Phase 1 --- Foundation
 
 -   Create monorepo.
--   Set up Next.js, NestJS and shared TypeScript contracts.
--   Configure PostgreSQL and Prisma.
--   Configure Redis and BullMQ.
+-   Set up CI on GitHub Actions.
+-   Set up Next.js, Fastify and shared TypeScript contracts.
+-   Configure PostgreSQL, Drizzle and pg-boss.
 -   Establish Docker Compose development environment.
--   Implement API authentication.
+-   Implement admin login and scoped API keys.
 
-**Result:** petri. can start and persist data.
+**Result:** petri. can start, persist data and protect the admin panel.
+
+Detailed tasks for each phase are in `docs/plan.md`.
 
 ### Phase 2 --- First deployment
 
@@ -1078,6 +1149,9 @@ losing deployment state.
 -   Create and remove preview routes.
 -   Configure the static NPM proxy hosts, wildcard domain and TLS.
 -   Restrict edge proxy access to the NPM VM.
+-   Block outbound traffic from application containers and builds to
+    private address ranges. This must be in place before any preview is
+    public.
 -   Implement unique subdomain generation.
 -   Test public access from outside the homelab.
 
@@ -1109,8 +1183,9 @@ intervention.
 ### Phase 6 --- Hardening
 
 -   Isolate build execution.
--   Restrict container networking.
--   Add resource limits.
+-   Review and tighten container network rules.
+-   Review resource limits.
+-   Document configuring an OIDC provider.
 -   Improve secret handling.
 -   Add reconciliation and failure recovery.
 -   Document backup and restore procedures.
@@ -1146,7 +1221,8 @@ implementation.
                           host forwarding to a    
                           petri. edge proxy       
 
-  Edge proxy              Traefik or Caddy        Open
+  Edge proxy              Caddy, configured via   Decided (5.2)
+                          its admin API           
 
   Source types            Git and ZIP             Decided
 
@@ -1155,26 +1231,37 @@ implementation.
 
   Lifecycle               Temporary and permanent Decided
 
-  Frontend                Next.js                 Proposed
+  Target server           x86-64-v3 VM on Proxmox Decided
 
-  Backend                 NestJS                  Proposed
+  Code hosting and CI     GitHub + GitHub Actions Decided
 
-  Database                PostgreSQL              Proposed
+  Frontend                Next.js                 Decided (5.2)
 
-  Job queue               Redis + BullMQ          Proposed
+  Backend                 Fastify + Zod           Decided (5.2)
 
-  Private Git access      Deploy keys and/or      Open
-                          tokens                  
+  Database                PostgreSQL + Drizzle    Decided (5.2)
 
-  Screenshot generation   Automatic screenshot    Proposed
-                          with optional custom    
-                          image                   
+  Job queue               pg-boss on PostgreSQL   Decided (5.2)
+
+  Private Git access      Public repositories     Proposed
+                          only in the MVP; deploy 
+                          keys and/or tokens      
+                          later                   
+
+  Screenshot generation   Uploaded image in the   Proposed
+                          MVP; automatic          
+                          screenshots later       
 
   Build isolation         Separate VM/host in a   Recommended
                           later phase             
 
-  Authentication          Protected dashboard and Proposed
+  Authentication          Public gallery without  Decided
+                          login; admin login via  
+                          Better Auth (password   
+                          now, OIDC later);       
                           scoped API keys         
+
+  License                 AGPL-3.0-or-later       Decided
   -----------------------------------------------------------------------
 
 ------------------------------------------------------------------------
