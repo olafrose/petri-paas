@@ -53,8 +53,29 @@ jobs:
           --health-retries 15
     env:
       TEST_DATABASE_URL: postgres://petri:petri@localhost:5432/petri
+      BUILDKIT_HOST: tcp://127.0.0.1:1234
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      # Rootless BuildKit, as in production. Ubuntu runners restrict
+      # unprivileged user namespaces by default; lift that on this
+      # throwaway machine.
+      - name: Start BuildKit
+        run: |
+          sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
+          docker run -d --name buildkitd \
+            --security-opt seccomp=unconfined \
+            --security-opt apparmor=unconfined \
+            --security-opt systempaths=unconfined \
+            -p 127.0.0.1:1234:1234 \
+            moby/buildkit:v0.34.2-rootless --addr tcp://0.0.0.0:1234
+          scripts/install-buildctl.sh
+          for _ in $(seq 1 30); do
+            .tools/bin/buildctl --addr "$BUILDKIT_HOST" debug workers && exit 0
+            sleep 1
+          done
+          docker logs buildkitd
+          exit 1
 
       - uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6.1.1
 

@@ -50,8 +50,15 @@ USER node
 EXPOSE 4000
 CMD ["node", "dist/main.js"]
 
+# The worker fetches sources with git and drives BuildKit with buildctl
+# (same version as the buildkitd service).
+FROM moby/buildkit:v0.34.2-rootless AS buildkit
+
 FROM ${NODE_IMAGE} AS worker
-ENV NODE_ENV=production UPLOADS_DIR=/var/lib/petri/uploads
+ENV NODE_ENV=production UPLOADS_DIR=/var/lib/petri/uploads \
+	BUILDKIT_HOST=tcp://buildkitd:1234
+RUN apk add --no-cache git
+COPY --from=buildkit /usr/bin/buildctl /usr/local/bin/buildctl
 WORKDIR /app
 COPY --from=build /out/worker ./
 RUN mkdir -p /var/lib/petri/uploads && chown node:node /var/lib/petri/uploads
