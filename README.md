@@ -38,6 +38,17 @@ Commands:
 | `pnpm dev:infra` | Start local services (Docker Compose)    |
 | `pnpm dev:infra:down` | Stop local services                 |
 | `pnpm dev:check-db` | Check the database connection         |
+| `pnpm test:integration` | Run integration tests (needs PostgreSQL) |
+| `pnpm db:generate` | Generate a SQL migration after changing the schema |
+| `pnpm db:migrate` | Apply pending migrations to `DATABASE_URL` |
+
+Integration tests (`*.int.test.ts`) create a temporary database on the
+server in `TEST_DATABASE_URL` (default: the dev database), and drop it
+afterwards.
+
+The database schema lives in `packages/database/src/schema.ts`. After
+changing it, run `pnpm db:generate` and commit the generated migration;
+CI fails if the two are out of sync.
 
 Workspace packages are used directly from their TypeScript sources in
 development (the `@petri/source` export condition), and from compiled

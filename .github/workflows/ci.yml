@@ -32,3 +32,42 @@ jobs:
       - run: pnpm typecheck
       - run: pnpm test
       - run: pnpm build
+
+  integration:
+    name: Integration
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    services:
+      postgres:
+        image: postgres:18-alpine
+        env:
+          POSTGRES_USER: petri
+          POSTGRES_PASSWORD: petri
+          POSTGRES_DB: petri
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U petri -d petri"
+          --health-interval 2s
+          --health-timeout 3s
+          --health-retries 15
+    env:
+      TEST_DATABASE_URL: postgres://petri:petri@localhost:5432/petri
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6.1.1
+
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm test:integration
+
+      - name: Migrations match the schema
+        run: |
+          pnpm db:generate
+          git diff --exit-code -- packages/database/migrations
+          test -z "$(git status --porcelain -- packages/database/migrations)"
