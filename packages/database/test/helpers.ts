@@ -1,6 +1,14 @@
 import { sql } from "drizzle-orm";
 import { afterAll, beforeEach, expect, inject } from "vitest";
 import { createDatabase, type Database } from "../src/client.ts";
+import { isConstraintViolation } from "../src/errors.ts";
+
+// Set by global-setup.ts for each test run.
+declare module "vitest" {
+	export interface ProvidedContext {
+		databaseUrl: string;
+	}
+}
 
 /**
  * Connects to the test run's database and empties all tables before each
@@ -33,7 +41,8 @@ export async function expectConstraintViolation(
 		(error: unknown) => error,
 	);
 	expect(error, `expected a violation of ${constraint}`).toBeDefined();
-	// Drizzle wraps driver errors; the PostgreSQL details are on `cause`.
-	const cause = (error as { cause?: { constraint?: string } }).cause;
-	expect(cause?.constraint).toBe(constraint);
+	expect(
+		isConstraintViolation(error, constraint),
+		`expected a violation of ${constraint}, got: ${String(error)}`,
+	).toBe(true);
 }

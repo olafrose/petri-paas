@@ -41,6 +41,11 @@ Commands:
 | `pnpm test:integration` | Run integration tests (needs PostgreSQL) |
 | `pnpm db:generate` | Generate a SQL migration after changing the schema |
 | `pnpm db:migrate` | Apply pending migrations to `DATABASE_URL` |
+| `pnpm dev:api`   | Run the API with reload on change (port 4000) |
+
+With the API running, the interactive API documentation is at
+<http://localhost:4000/api/v1/docs> and the OpenAPI document at
+`/api/v1/docs/json`.
 
 Integration tests (`*.int.test.ts`) create a temporary database on the
 server in `TEST_DATABASE_URL` (default: the dev database), and drop it

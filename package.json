@@ -18,7 +18,8 @@
 		"dev:infra:down": "docker compose -f infrastructure/compose/dev.yml down",
 		"dev:check-db": "node --conditions=@petri/source --env-file-if-exists=.env scripts/check-db.ts",
 		"db:generate": "pnpm --filter @petri/database db:generate",
-		"db:migrate": "pnpm --filter @petri/database db:migrate"
+		"db:migrate": "pnpm --filter @petri/database db:migrate",
+		"dev:api": "pnpm --filter @petri/api dev"
 	},
 	"devDependencies": {
 		"@biomejs/biome": "2.6.5",
@@ -27,6 +28,7 @@
 		"@types/pg": "8.23.1",
 		"pg": "8.23.1",
 		"typescript": "7.0.2",
+		"vite": "8.3.6",
 		"vitest": "5.1.0"
 	}
 }
