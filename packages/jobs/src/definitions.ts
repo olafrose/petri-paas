@@ -17,6 +17,20 @@ export const jobs = {
 			deleteAfterSeconds: 24 * 60 * 60,
 		},
 	},
+	/** Fetch, build, run and health-check one build of a deployment. */
+	"deployment.run": {
+		data: z.object({ deploymentId: z.uuid(), buildId: z.uuid() }),
+		queue: {
+			// A failed build fails the deployment; the owner redeploys. The
+			// one retry covers a worker that died mid-job.
+			retryLimit: 1,
+			retryDelay: 10,
+			// Longer than the 15-minute build timeout plus the other steps.
+			expireInSeconds: 30 * 60,
+			retentionSeconds: 7 * 24 * 60 * 60,
+			deleteAfterSeconds: 7 * 24 * 60 * 60,
+		},
+	},
 } satisfies Record<string, { data: z.ZodType; queue: QueueOptions }>;
 
 export type JobName = keyof typeof jobs;

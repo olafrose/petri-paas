@@ -1,7 +1,8 @@
 import type { CreatedApiKey, Scope } from "@petri/contracts";
 import { useTestDatabase } from "@petri/database/testing";
+import { JobQueue } from "@petri/jobs";
 import type { InjectOptions, LightMyRequestResponse } from "fastify";
-import { afterAll, beforeAll, beforeEach } from "vitest";
+import { afterAll, beforeAll, beforeEach, inject } from "vitest";
 import { buildApp } from "../src/app.ts";
 import { createAuth } from "../src/auth/auth.ts";
 import { setOwner } from "../src/auth/owner.ts";
@@ -28,10 +29,15 @@ export function useTestApp() {
 		secret: "test-secret-that-is-at-least-32-characters-long",
 	});
 	let app: Awaited<ReturnType<typeof buildApp>>;
+	let jobs: JobQueue;
 	let cookie: string | undefined;
 
 	beforeAll(async () => {
-		app = await buildApp({ db, auth, publicUrl });
+		jobs = await JobQueue.start({
+			connectionString: inject("databaseUrl"),
+			maxConnections: 2,
+		});
+		app = await buildApp({ db, auth, jobs, publicUrl });
 		await app.ready();
 	});
 
@@ -41,6 +47,7 @@ export function useTestApp() {
 
 	afterAll(async () => {
 		await app.close();
+		await jobs.stop({ timeoutMs: 1000 });
 	});
 
 	async function ownerCookie(): Promise<string> {
@@ -64,6 +71,9 @@ export function useTestApp() {
 	return {
 		db,
 		auth,
+		get jobs() {
+			return jobs;
+		},
 		get app() {
 			return app;
 		},

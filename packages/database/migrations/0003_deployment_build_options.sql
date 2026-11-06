@@ -1,0 +1,1 @@
+ALTER TABLE "deployments" ADD COLUMN "build_options" jsonb DEFAULT '{"strategy":"auto","args":{}}'::jsonb NOT NULL;

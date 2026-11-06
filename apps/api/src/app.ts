@@ -1,6 +1,7 @@
 import swagger from "@fastify/swagger";
 import swaggerUi from "@fastify/swagger-ui";
 import type { Database } from "@petri/database";
+import type { JobQueue } from "@petri/jobs";
 import Fastify, { type FastifyServerOptions } from "fastify";
 import {
 	jsonSchemaTransform,
@@ -14,6 +15,7 @@ import type { Auth } from "./auth/auth.ts";
 import { registerErrorHandling } from "./errors.ts";
 import { apiKeyRoutes } from "./routes/api-keys.ts";
 import { authRoutes } from "./routes/auth.ts";
+import { deploymentRoutes } from "./routes/deployments.ts";
 import { galleryRoutes } from "./routes/gallery.ts";
 import { healthRoutes } from "./routes/health.ts";
 import { projectRoutes } from "./routes/projects.ts";
@@ -21,6 +23,8 @@ import { projectRoutes } from "./routes/projects.ts";
 export interface AppOptions {
 	db: Database;
 	auth: Auth;
+	/** Background jobs; the API only sends them. */
+	jobs: JobQueue;
 	/** Public URL of the admin panel, e.g. https://petri.example.com. */
 	publicUrl: string;
 	/** Reverse proxies whose X-Forwarded-For is trusted. */
@@ -32,6 +36,7 @@ export interface AppOptions {
 export async function buildApp({
 	db,
 	auth,
+	jobs,
 	publicUrl,
 	trustProxy = [],
 	logger = false,
@@ -77,6 +82,7 @@ export async function buildApp({
 	await app.register(authRoutes, { prefix, auth, publicUrl });
 	await app.register(galleryRoutes, { prefix, db });
 	await app.register(projectRoutes, { prefix, db });
+	await app.register(deploymentRoutes, { prefix, db, jobs });
 	await app.register(apiKeyRoutes, { prefix, db });
 
 	return app;
