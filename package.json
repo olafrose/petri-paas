@@ -12,11 +12,17 @@
 		"format": "biome check --write .",
 		"typecheck": "tsc -p tsconfig.json && pnpm -r --if-present typecheck",
 		"test": "vitest run",
-		"build": "pnpm -r --if-present build"
+		"build": "pnpm -r --if-present build",
+		"dev:infra": "docker compose -f infrastructure/compose/dev.yml up -d --wait",
+		"dev:infra:down": "docker compose -f infrastructure/compose/dev.yml down",
+		"dev:check-db": "node --conditions=@petri/source --env-file-if-exists=.env scripts/check-db.ts"
 	},
 	"devDependencies": {
 		"@biomejs/biome": "2.6.5",
+		"@petri/config": "workspace:*",
 		"@types/node": "^24.19.2",
+		"@types/pg": "8.23.1",
+		"pg": "8.23.1",
 		"typescript": "7.0.2",
 		"vitest": "5.1.0"
 	}

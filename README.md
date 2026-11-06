@@ -21,6 +21,9 @@ Setup:
 
 ```bash
 pnpm install
+cp .env.example .env    # local configuration, see comments inside
+pnpm dev:infra          # start PostgreSQL in Docker
+pnpm dev:check-db       # confirm the configured database is reachable
 ```
 
 Commands:
@@ -32,6 +35,13 @@ Commands:
 | `pnpm typecheck` | Type-check all packages                  |
 | `pnpm test`      | Run tests (Vitest)                       |
 | `pnpm build`     | Build all packages                       |
+| `pnpm dev:infra` | Start local services (Docker Compose)    |
+| `pnpm dev:infra:down` | Stop local services                 |
+| `pnpm dev:check-db` | Check the database connection         |
+
+Workspace packages are used directly from their TypeScript sources in
+development (the `@petri/source` export condition), and from compiled
+`dist/` output in production builds.
 
 ## License
 
