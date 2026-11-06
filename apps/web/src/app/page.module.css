@@ -1,0 +1,38 @@
+.title {
+	font-family: var(--font-hand);
+	font-weight: normal;
+	font-size: 2.25rem;
+	margin: 0 0 var(--space-4);
+}
+
+.empty {
+	color: var(--ink-soft);
+	font-style: italic;
+}
+
+.grid {
+	list-style: none;
+	padding: 0;
+	margin: 0;
+	display: grid;
+	gap: var(--space-3);
+	grid-template-columns: repeat(auto-fill, minmax(16rem, 1fr));
+}
+
+.card {
+	background: var(--paper-raised);
+	border: 1px solid var(--paper-line);
+	border-radius: var(--radius);
+	padding: var(--space-3);
+}
+
+.card h2 {
+	margin: 0 0 var(--space-2);
+	font-size: 1.15rem;
+}
+
+.meta {
+	color: var(--ink-soft);
+	font-size: 0.875rem;
+	margin-bottom: 0;
+}
