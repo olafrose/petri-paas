@@ -43,7 +43,11 @@ export const deploymentStatus = pgEnum("deployment_status", [
 	"stopped",
 	"expired",
 	"deleting",
+	/** Resources removed; the row and its history remain. */
+	"deleted",
 ]);
+
+export type DeploymentStatus = (typeof deploymentStatus.enumValues)[number];
 
 export const lifecycleMode = pgEnum("lifecycle_mode", [
 	"temporary",
