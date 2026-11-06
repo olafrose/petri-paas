@@ -86,6 +86,14 @@ export type DeploymentSource =
 			directory?: string;
 	  };
 
+/** How to build a deployment. Stored as JSON. */
+export interface BuildOptions {
+	/** "auto" uses the Dockerfile if present (buildpacks come later). */
+	strategy: "auto" | "dockerfile";
+	/** Build arguments. Visible in the image; never use them for secrets. */
+	args: Record<string, string>;
+}
+
 export const projects = pgTable(
 	"projects",
 	{
@@ -123,6 +131,10 @@ export const deployments = pgTable(
 		name: text().notNull(),
 		subdomain: text().notNull().unique(),
 		source: jsonb().$type<DeploymentSource>().notNull(),
+		buildOptions: jsonb()
+			.$type<BuildOptions>()
+			.notNull()
+			.default({ strategy: "auto", args: {} }),
 		status: deploymentStatus().notNull().default("queued"),
 		imageId: text(),
 		containerId: text(),

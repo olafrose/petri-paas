@@ -831,7 +831,7 @@ All endpoints are versioned under `/api/v1`.
   "source": {
     "type": "git",
     "repository": "https://github.com/example/dashboard",
-    "branch": "feature/new-ui"
+    "ref": "feature/new-ui"
   },
   "build": {
     "strategy": "auto",
@@ -844,8 +844,13 @@ All endpoints are versioned under `/api/v1`.
 }
 ```
 
-The response should include the deployment ID, initial status and a link
-to the deployment resource.
+`ref` is a branch, tag or commit. The project is created if no project
+with that slug exists, so one call is enough for a coding assistant.
+`name` (default: the ref) and `subdomain` (default:
+`<project>-<name>`) are optional.
+
+The response includes the deployment ID, initial status and a link to
+the deployment resource.
 
 ### 12.4 Coding assistant integration
 
