@@ -19,12 +19,15 @@ import { deploymentRoutes } from "./routes/deployments.ts";
 import { galleryRoutes } from "./routes/gallery.ts";
 import { healthRoutes } from "./routes/health.ts";
 import { projectRoutes } from "./routes/projects.ts";
+import { type UploadOptions, uploadRoutes } from "./routes/uploads.ts";
 
 export interface AppOptions {
 	db: Database;
 	auth: Auth;
 	/** Background jobs; the API only sends them. */
 	jobs: JobQueue;
+	/** ZIP upload storage and limits. */
+	uploads: Pick<UploadOptions, "uploadsDir" | "maxUploadBytes" | "zipLimits">;
 	/** Public URL of the admin panel, e.g. https://petri.example.com. */
 	publicUrl: string;
 	/** Reverse proxies whose X-Forwarded-For is trusted. */
@@ -37,6 +40,7 @@ export async function buildApp({
 	db,
 	auth,
 	jobs,
+	uploads,
 	publicUrl,
 	trustProxy = [],
 	logger = false,
@@ -83,6 +87,7 @@ export async function buildApp({
 	await app.register(galleryRoutes, { prefix, db });
 	await app.register(projectRoutes, { prefix, db });
 	await app.register(deploymentRoutes, { prefix, db, jobs });
+	await app.register(uploadRoutes, { prefix, db, jobs, ...uploads });
 	await app.register(apiKeyRoutes, { prefix, db });
 
 	return app;

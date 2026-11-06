@@ -1,3 +1,6 @@
+import { mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import type { CreatedApiKey, Scope } from "@petri/contracts";
 import { useTestDatabase } from "@petri/database/testing";
 import { JobQueue } from "@petri/jobs";
@@ -28,6 +31,7 @@ export function useTestApp() {
 		publicUrl,
 		secret: "test-secret-that-is-at-least-32-characters-long",
 	});
+	const uploadsDir = mkdtempSync(join(tmpdir(), "petri-test-uploads-"));
 	let app: Awaited<ReturnType<typeof buildApp>>;
 	let jobs: JobQueue;
 	let cookie: string | undefined;
@@ -37,7 +41,13 @@ export function useTestApp() {
 			connectionString: inject("databaseUrl"),
 			maxConnections: 2,
 		});
-		app = await buildApp({ db, auth, jobs, publicUrl });
+		app = await buildApp({
+			db,
+			auth,
+			jobs,
+			uploads: { uploadsDir, maxUploadBytes: 1024 * 1024 },
+			publicUrl,
+		});
 		await app.ready();
 	});
 
@@ -48,6 +58,7 @@ export function useTestApp() {
 	afterAll(async () => {
 		await app.close();
 		await jobs.stop({ timeoutMs: 1000 });
+		rmSync(uploadsDir, { recursive: true, force: true });
 	});
 
 	async function ownerCookie(): Promise<string> {
@@ -71,6 +82,8 @@ export function useTestApp() {
 	return {
 		db,
 		auth,
+		/** Upload directory; uploads are limited to 1 MB in tests. */
+		uploadsDir,
 		get jobs() {
 			return jobs;
 		},

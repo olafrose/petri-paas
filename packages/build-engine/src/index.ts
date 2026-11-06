@@ -5,3 +5,9 @@ export {
 	type GitFetchOptions,
 	type GitFetchResult,
 } from "./source/git.ts";
+export {
+	DEFAULT_ZIP_LIMITS,
+	extractZip,
+	inspectZip,
+	type ZipLimits,
+} from "./source/zip.ts";

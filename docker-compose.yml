@@ -51,6 +51,8 @@ services:
       OIDC_ISSUER: ${OIDC_ISSUER:-}
       OIDC_CLIENT_ID: ${OIDC_CLIENT_ID:-}
       OIDC_CLIENT_SECRET: ${OIDC_CLIENT_SECRET:-}
+    volumes:
+      - uploads:/var/lib/petri/uploads
     depends_on:
       postgres:
         condition: service_healthy
@@ -70,6 +72,8 @@ services:
     image: petri-worker
     environment:
       <<: *database-env
+    volumes:
+      - uploads:/var/lib/petri/uploads
     depends_on:
       # The API applies database migrations on startup.
       api:
@@ -107,3 +111,5 @@ networks:
 
 volumes:
   postgres-data:
+  # ZIP uploads, kept so deployments can be rebuilt.
+  uploads:

@@ -104,6 +104,30 @@ export const createDeploymentBody = z
 
 export type CreateDeploymentBody = z.infer<typeof createDeploymentBody>;
 
+/**
+ * Settings for a ZIP upload, sent as the JSON form field `settings` next
+ * to the file field `archive`.
+ */
+export const uploadDeploymentSettings = z
+	.object({
+		project: createDeploymentBody.shape.project,
+		name: z
+			.string()
+			.trim()
+			.min(1)
+			.max(100)
+			.optional()
+			.meta({ description: 'Display name. Defaults to "upload".' }),
+		subdomain: createDeploymentBody.shape.subdomain,
+		directory: directory.optional(),
+		build: createDeploymentBody.shape.build,
+		lifecycle: createDeploymentBody.shape.lifecycle,
+	})
+	.strict()
+	.meta({ id: "UploadDeploymentSettings" });
+
+export type UploadDeploymentSettings = z.infer<typeof uploadDeploymentSettings>;
+
 export const deploymentSource = z.discriminatedUnion("type", [
 	z.object({
 		type: z.literal("git"),

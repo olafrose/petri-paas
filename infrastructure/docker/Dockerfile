@@ -39,17 +39,22 @@ RUN --mount=type=cache,id=pnpm-store,target=/pnpm-store \
 # Code is owned by root and read-only for the `node` user the services run as.
 
 FROM ${NODE_IMAGE} AS api
-ENV NODE_ENV=production API_HOST=0.0.0.0 API_PORT=4000
+ENV NODE_ENV=production API_HOST=0.0.0.0 API_PORT=4000 \
+	UPLOADS_DIR=/var/lib/petri/uploads
 WORKDIR /app
 COPY --from=build /out/api ./
+# Uploaded archives (a volume shared with the worker). Created here so the
+# volume starts out owned by the unprivileged user.
+RUN mkdir -p /var/lib/petri/uploads && chown node:node /var/lib/petri/uploads
 USER node
 EXPOSE 4000
 CMD ["node", "dist/main.js"]
 
 FROM ${NODE_IMAGE} AS worker
-ENV NODE_ENV=production
+ENV NODE_ENV=production UPLOADS_DIR=/var/lib/petri/uploads
 WORKDIR /app
 COPY --from=build /out/worker ./
+RUN mkdir -p /var/lib/petri/uploads && chown node:node /var/lib/petri/uploads
 USER node
 CMD ["node", "dist/main.js"]
 

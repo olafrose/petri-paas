@@ -225,8 +225,10 @@ describe("limits", () => {
 });
 
 describe("a real public repository", () => {
+	// Retried: depends on the network and on GitHub being reachable.
 	test("is fetched from GitHub at a pinned commit", {
 		timeout: 60_000,
+		retry: 2,
 	}, async () => {
 		const destination = workspace();
 		const { commit } = await fetchGitSource({

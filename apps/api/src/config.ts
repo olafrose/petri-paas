@@ -1,3 +1,5 @@
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { commonSchema, databaseSchema } from "@petri/config";
 import { z } from "zod";
 
@@ -30,6 +32,11 @@ export const apiConfigSchema = commonSchema
 					.map((entry) => entry.trim())
 					.filter(Boolean),
 			),
+		/**
+		 * Where uploaded ZIP archives are kept (shared with the worker).
+		 * The default suits development only: it may be cleared on reboot.
+		 */
+		UPLOADS_DIR: z.string().default(join(tmpdir(), "petri-uploads")),
 		OIDC_ISSUER: z.url().optional(),
 		OIDC_CLIENT_ID: z.string().min(1).optional(),
 		OIDC_CLIENT_SECRET: z.string().min(1).optional(),

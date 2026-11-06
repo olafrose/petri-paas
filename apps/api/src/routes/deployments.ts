@@ -1,5 +1,6 @@
 import { randomBytes } from "node:crypto";
 import {
+	type CreateDeploymentBody,
 	createDeploymentBody,
 	type Deployment,
 	deployment,
@@ -13,6 +14,7 @@ import {
 import {
 	builds,
 	type Database,
+	type DeploymentSource,
 	deploymentEvents,
 	deployments,
 	isConstraintViolation,
@@ -118,6 +120,92 @@ async function generateSubdomain(
 	throw new Error("could not find a free subdomain");
 }
 
+export interface NewDeployment {
+	project: string;
+	name: string;
+	subdomain?: string | undefined;
+	source: DeploymentSource;
+	build: CreateDeploymentBody["build"];
+	lifecycle: CreateDeploymentBody["lifecycle"];
+}
+
+/**
+ * Creates a deployment with its first build and queues its job, all in one
+ * transaction: no deployment without its job, and no job for a deployment
+ * that wasn't saved.
+ */
+export async function createDeployment(
+	db: Database,
+	jobs: JobQueue,
+	input: NewDeployment,
+): Promise<Deployment> {
+	const expiresAt =
+		input.lifecycle.mode === "temporary"
+			? new Date(Date.now() + input.lifecycle.ttlHours * HOUR_MS)
+			: null;
+	try {
+		const { row, build } = await withTransaction(db, async (tx) => {
+			const project = await ensureProject(tx, input.project);
+			const subdomain =
+				input.subdomain ??
+				(await generateSubdomain(tx, input.project, input.name));
+
+			const [row] = await tx
+				.insert(deployments)
+				.values({
+					projectId: project.id,
+					name: input.name,
+					subdomain,
+					source: input.source,
+					buildOptions: {
+						strategy: input.build.strategy,
+						args: input.build.args,
+					},
+					internalPort: input.build.port ?? null,
+					lifecycleMode: input.lifecycle.mode,
+					expiresAt,
+				})
+				.returning();
+			if (!row) throw new Error("insert returned no row");
+
+			const [build] = await tx
+				.insert(builds)
+				.values({ deploymentId: row.id })
+				.returning();
+			if (!build) throw new Error("insert returned no row");
+
+			await jobs.send(
+				"deployment.run",
+				{ deploymentId: row.id, buildId: build.id },
+				{ transaction: tx, singletonKey: row.id },
+			);
+
+			await tx.insert(deploymentEvents).values({
+				deploymentId: row.id,
+				type: "status",
+				message: "Deployment queued",
+				data: { to: "queued" },
+			});
+			await publishEvent(tx, {
+				type: "deployment.created",
+				deploymentId: row.id,
+				projectId: project.id,
+			});
+			return { row, build };
+		});
+		return toDeployment(row, build);
+	} catch (error) {
+		if (isConstraintViolation(error, "deployments_subdomain_unique")) {
+			throw new ApiError(
+				409,
+				"conflict",
+				`The subdomain "${input.subdomain}" is already in use`,
+			);
+		}
+		throw error;
+	}
+}
+
 export const deploymentRoutes: FastifyPluginAsyncZod<{
 	db: Database;
 	jobs: JobQueue;
@@ -139,85 +227,23 @@ export const deploymentRoutes: FastifyPluginAsyncZod<{
 		},
 		async (request, reply) => {
 			const body = request.body;
-			const name = body.name ?? body.source.ref;
-			const expiresAt =
-				body.lifecycle.mode === "temporary"
-					? new Date(Date.now() + body.lifecycle.ttlHours * HOUR_MS)
-					: null;
-
-			try {
-				const { row, build } = await withTransaction(db, async (tx) => {
-					const project = await ensureProject(tx, body.project);
-					const subdomain =
-						body.subdomain ?? (await generateSubdomain(tx, body.project, name));
-
-					const [row] = await tx
-						.insert(deployments)
-						.values({
-							projectId: project.id,
-							name,
-							subdomain,
-							source: {
-								type: "git",
-								repository: body.source.repository,
-								ref: body.source.ref,
-								...(body.source.directory && {
-									directory: body.source.directory,
-								}),
-							},
-							buildOptions: {
-								strategy: body.build.strategy,
-								args: body.build.args,
-							},
-							internalPort: body.build.port ?? null,
-							lifecycleMode: body.lifecycle.mode,
-							expiresAt,
-						})
-						.returning();
-					if (!row) throw new Error("insert returned no row");
-
-					const [build] = await tx
-						.insert(builds)
-						.values({ deploymentId: row.id })
-						.returning();
-					if (!build) throw new Error("insert returned no row");
-
-					// Part of this transaction: no deployment without its job,
-					// and no job for a deployment that wasn't saved.
-					await jobs.send(
-						"deployment.run",
-						{ deploymentId: row.id, buildId: build.id },
-						{ transaction: tx, singletonKey: row.id },
-					);
-
-					await tx.insert(deploymentEvents).values({
-						deploymentId: row.id,
-						type: "status",
-						message: "Deployment queued",
-						data: { to: "queued" },
-					});
-					await publishEvent(tx, {
-						type: "deployment.created",
-						deploymentId: row.id,
-						projectId: project.id,
-					});
-					return { row, build };
-				});
-
-				return reply
-					.status(201)
-					.header("location", `/api/v1/deployments/${row.id}`)
-					.send(toDeployment(row, build));
-			} catch (error) {
-				if (isConstraintViolation(error, "deployments_subdomain_unique")) {
-					throw new ApiError(
-						409,
-						"conflict",
-						`The subdomain "${body.subdomain}" is already in use`,
-					);
-				}
-				throw error;
-			}
+			const created = await createDeployment(db, jobs, {
+				project: body.project,
+				name: body.name ?? body.source.ref,
+				subdomain: body.subdomain,
+				source: {
+					type: "git",
+					repository: body.source.repository,
+					ref: body.source.ref,
+					...(body.source.directory && { directory: body.source.directory }),
+				},
+				build: body.build,
+				lifecycle: body.lifecycle,
+			});
+			return reply
+				.status(201)
+				.header("location", `/api/v1/deployments/${created.id}`)
+				.send(created);
 		},
 	);
 
