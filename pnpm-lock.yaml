@@ -279,18 +279,33 @@ importers:
 
   apps/worker:
     dependencies:
+      '@petri/build-engine':
+        specifier: workspace:*
+        version: link:../../packages/build-engine
       '@petri/config':
         specifier: workspace:*
         version: link:../../packages/config
       '@petri/database':
         specifier: workspace:*
         version: link:../../packages/database
+      '@petri/deployment-core':
+        specifier: workspace:*
+        version: link:../../packages/deployment-core
       '@petri/jobs':
         specifier: workspace:*
         version: link:../../packages/jobs
+      '@petri/runtime':
+        specifier: workspace:*
+        version: link:../../packages/runtime
+      drizzle-orm:
+        specifier: 0.45.4
+        version: 0.45.4(@opentelemetry/api@1.10.0)(@types/pg@8.23.1)(kysely@0.29.8)(pg@8.23.1)
       pino:
         specifier: ^10.4.0
         version: 10.4.0
+      zod:
+        specifier: 4.6.7
+        version: 4.6.7
     devDependencies:
       '@types/node':
         specifier: ^24.19.2

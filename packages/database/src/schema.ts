@@ -174,6 +174,8 @@ export const builds = pgTable(
 		status: buildStatus().notNull().default("queued"),
 		/** Null until the build strategy has been detected. */
 		provider: buildProvider(),
+		/** Git commit that was built (Git sources only). */
+		commit: text(),
 		imageId: text(),
 		/** Path of the stored build log. */
 		logPath: text(),

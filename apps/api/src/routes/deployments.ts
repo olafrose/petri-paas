@@ -58,6 +58,7 @@ function toDeployment(
 			? {
 					id: build.id,
 					status: build.status,
+					commit: build.commit,
 					startedAt: build.startedAt?.toISOString() ?? null,
 					finishedAt: build.finishedAt?.toISOString() ?? null,
 					errorMessage: build.errorMessage,

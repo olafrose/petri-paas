@@ -1,16 +1,32 @@
 import type { Database } from "@petri/database";
 import type { JobQueue } from "@petri/jobs";
+import type { DockerRuntime } from "@petri/runtime";
 import type { Logger } from "pino";
+import {
+	type DeploymentRunSettings,
+	deploymentRunHandler,
+} from "./deployment-run.ts";
 import { pingHandler } from "./ping.ts";
 
 /** Registers a handler for every job type the worker processes. */
 export async function registerHandlers(
 	queue: JobQueue,
-	{ db, log }: { db: Database; log: Logger },
+	deps: {
+		db: Database;
+		log: Logger;
+		runtime: DockerRuntime;
+		settings: DeploymentRunSettings;
+	},
 ) {
 	await queue.work(
 		"system.ping",
-		withLogging(log, "system.ping", pingHandler(db)),
+		withLogging(deps.log, "system.ping", pingHandler(deps.db)),
+	);
+	// Two deployments at a time: builds are heavy on a small host.
+	await queue.work(
+		"deployment.run",
+		withLogging(deps.log, "deployment.run", deploymentRunHandler(deps)),
+		{ concurrency: 2 },
 	);
 }
 

@@ -146,6 +146,7 @@ export const deploymentSource = z.discriminatedUnion("type", [
 export const buildSummary = z.object({
 	id: z.uuid(),
 	status: z.enum(["queued", "running", "succeeded", "failed", "cancelled"]),
+	commit: z.string().nullable().meta({ description: "Git commit built" }),
 	startedAt: z.iso.datetime().nullable(),
 	finishedAt: z.iso.datetime().nullable(),
 	errorMessage: z.string().nullable(),

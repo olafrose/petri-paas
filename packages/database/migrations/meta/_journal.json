@@ -29,6 +29,13 @@
       "when": 1794004604292,
       "tag": "0003_deployment_build_options",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1794010850746,
+      "tag": "0004_build_commit",
+      "breakpoints": true
     }
   ]
 }

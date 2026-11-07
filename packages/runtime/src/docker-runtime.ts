@@ -132,6 +132,18 @@ export class DockerRuntime {
 		return body.Id;
 	}
 
+	/** TCP ports the image declares with EXPOSE, lowest first. */
+	async exposedPorts(imageName: string): Promise<number[]> {
+		const { body } = await this.#docker.call<{
+			Config: { ExposedPorts?: Record<string, unknown> | null };
+		}>("GET", `/images/${encodeURIComponent(imageName)}/json`);
+		return Object.keys(body.Config.ExposedPorts ?? {})
+			.filter((key) => key.endsWith("/tcp"))
+			.map((key) => Number.parseInt(key, 10))
+			.filter((port) => port > 0 && port < 65536)
+			.sort((a, b) => a - b);
+	}
+
 	async removeImage(imageName: string): Promise<void> {
 		await this.#docker.call(
 			"DELETE",

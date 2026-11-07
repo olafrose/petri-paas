@@ -15,3 +15,8 @@ export {
 	LimitsNotEnforcedError,
 	type ResourceLimits,
 } from "./docker-runtime.ts";
+export {
+	type HealthCheckOptions,
+	type HealthCheckResult,
+	waitForHealthy,
+} from "./health-check.ts";
