@@ -24,7 +24,10 @@ export interface TestGitServer {
  * - /redirect.git/... answers with a redirect
  * - /slow.git/... never answers
  */
-export async function startGitServer(): Promise<TestGitServer> {
+export async function startGitServer(
+	/** More repositories to serve: name → files, one commit on main. */
+	extraRepos: Record<string, Record<string, string>> = {},
+): Promise<TestGitServer> {
 	const root = mkdtempSync(join(tmpdir(), "petri-git-server-"));
 	const git = (cwd: string, ...args: string[]) =>
 		execFileSync("git", args, {
@@ -61,6 +64,19 @@ export async function startGitServer(): Promise<TestGitServer> {
 	git(work, "add", ".");
 	git(work, "commit", "--quiet", "-m", "feature");
 	const feature = git(work, "rev-parse", "HEAD");
+
+	for (const [name, files] of Object.entries(extraRepos)) {
+		const dir = join(root, `work-${name}`);
+		execFileSync("mkdir", ["-p", dir]);
+		git(dir, "init", "--quiet", "--initial-branch=main");
+		for (const [path, content] of Object.entries(files)) {
+			execFileSync("mkdir", ["-p", join(dir, path, "..")]);
+			writeFileSync(join(dir, path), content);
+		}
+		git(dir, "add", ".");
+		git(dir, "commit", "--quiet", "-m", "app");
+		git(root, "clone", "--quiet", "--bare", dir, join(root, `${name}.git`));
+	}
 
 	const bare = join(root, "demo.git");
 	git(root, "clone", "--quiet", "--bare", work, bare);

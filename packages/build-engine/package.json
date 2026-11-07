@@ -11,7 +11,7 @@
 			"default": "./dist/index.js"
 		},
 		"./testing": {
-			"@petri/source": "./test/zip-writer.ts"
+			"@petri/source": "./test/index.ts"
 		}
 	},
 	"scripts": {

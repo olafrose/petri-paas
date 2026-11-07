@@ -70,11 +70,17 @@ services:
       dockerfile: infrastructure/docker/Dockerfile
       target: worker
     image: petri-worker
+    # A fixed name: the worker joins each app's network by this name to
+    # health-check it.
+    container_name: petri-worker
     environment:
       <<: *database-env
+      WORKER_CONTAINER: petri-worker
     networks: [internal, build, docker]
     volumes:
       - uploads:/var/lib/petri/uploads
+      - workspaces:/var/lib/petri/workspaces
+      - build-logs:/var/lib/petri/logs
     depends_on:
       # The API applies database migrations on startup.
       api:
@@ -158,3 +164,7 @@ volumes:
   uploads:
   # BuildKit's build cache (size-limited in buildkitd.toml).
   buildkit-state:
+  # Sources and image archives during builds; emptied after each build.
+  workspaces:
+  # Build logs, kept with the deployment history.
+  build-logs:
