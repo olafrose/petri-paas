@@ -72,6 +72,7 @@ services:
     image: petri-worker
     environment:
       <<: *database-env
+    networks: [internal, build]
     volumes:
       - uploads:/var/lib/petri/uploads
     depends_on:
@@ -79,6 +80,24 @@ services:
       api:
         condition: service_healthy
     stop_grace_period: 40s
+
+  # Rootless BuildKit. Only the worker can reach it (the "build" network).
+  # The relaxed confinement is what rootless mode needs to create its own
+  # user namespace; build steps run as an unprivileged user on the host.
+  buildkitd:
+    image: moby/buildkit:v0.34.2-rootless
+    restart: unless-stopped
+    networks: [build]
+    command:
+      - --addr=tcp://0.0.0.0:1234
+      - --config=/etc/buildkit/buildkitd.toml
+    security_opt:
+      - seccomp=unconfined
+      - apparmor=unconfined
+      - systempaths=unconfined
+    volumes:
+      - ./infrastructure/buildkit/buildkitd.toml:/etc/buildkit/buildkitd.toml:ro
+      - buildkit-state:/home/user/.local/share/buildkit
 
   web:
     <<: *service-defaults
@@ -108,8 +127,13 @@ networks:
     ipam:
       config:
         - subnet: ${PETRI_SUBNET:-172.31.250.0/24}
+  # Worker ↔ BuildKit only. Builds reach the internet (base images,
+  # packages) through it.
+  build:
 
 volumes:
   postgres-data:
   # ZIP uploads, kept so deployments can be rebuilt.
   uploads:
+  # BuildKit's build cache (size-limited in buildkitd.toml).
+  buildkit-state:

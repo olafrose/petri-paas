@@ -1,0 +1,10 @@
+# BuildKit daemon settings for petri. (rootless).
+
+[worker.oci]
+  # Keep the build cache from filling the disk.
+  gc = true
+  reservedSpace = "2GB"
+  maxUsedSpace = "20GB"
+
+[worker.containerd]
+  enabled = false

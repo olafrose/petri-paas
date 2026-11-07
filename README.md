@@ -22,7 +22,8 @@ Setup:
 ```bash
 pnpm install
 cp .env.example .env    # local configuration, see comments inside
-pnpm dev:infra          # start PostgreSQL in Docker
+pnpm dev:infra          # start PostgreSQL and BuildKit in Docker
+scripts/install-buildctl.sh  # BuildKit client for builds and tests
 pnpm dev:check-db       # confirm the configured database is reachable
 ```
 
