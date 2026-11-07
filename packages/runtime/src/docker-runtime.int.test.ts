@@ -205,16 +205,12 @@ describe("containers", { timeout: 60_000 }, () => {
 	test("restart automatically only once enabled", async () => {
 		const id = deployment();
 		await runWeb(id);
-		const policy = async () =>
-			(
-				await docker.call<{ HostConfig: { RestartPolicy: { Name: string } } }>(
-					"GET",
-					`/containers/petri-${id}/json`,
-				)
-			).body.HostConfig.RestartPolicy.Name;
+		const policy = async () => (await runtime.inspect(id))?.restartPolicy;
 		expect(await policy()).toBe("no");
 		await runtime.enableRestarts(id);
 		expect(await policy()).toBe("unless-stopped");
+		await runtime.disableRestarts(id);
+		expect(await policy()).toBe("no");
 	});
 
 	test("stop, start and remove", async () => {

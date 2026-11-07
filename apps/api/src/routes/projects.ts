@@ -13,7 +13,7 @@ import {
 	isConstraintViolation,
 	projects,
 } from "@petri/database";
-import { and, desc, eq } from "drizzle-orm";
+import { and, desc, eq, ne } from "drizzle-orm";
 import type { FastifyPluginAsyncZod } from "fastify-type-provider-zod";
 import { z } from "zod";
 import { ApiError } from "../errors.ts";
@@ -205,17 +205,43 @@ export const projectRoutes: FastifyPluginAsyncZod<{ db: Database }> = async (
 			config: { access: { scope: "deploy:delete" } },
 			schema: {
 				tags,
-				summary: "Delete a project and all its deployments",
+				summary: "Delete a project and its deployments' history",
+				description:
+					"Only once all its deployments are deleted: deleting a project removes their records, and with them petri.'s only reference to anything still running.",
 				params: idParams,
-				response: { 204: z.null(), 404: errorResponse },
+				response: { 204: z.null(), 404: errorResponse, 409: errorResponse },
 			},
 		},
 		async (request, reply) => {
-			const deleted = await db
-				.delete(projects)
-				.where(eq(projects.id, request.params.id))
-				.returning({ id: projects.id });
-			if (deleted.length === 0) throw notFound();
+			const { id } = request.params;
+			await db.transaction(async (tx) => {
+				// Locked: a deployment created meanwhile waits, then fails.
+				const [existing] = await tx
+					.select({ id: projects.id })
+					.from(projects)
+					.where(eq(projects.id, id))
+					.for("update");
+				if (!existing) throw notFound();
+
+				const [remaining] = await tx
+					.select({ id: deployments.id })
+					.from(deployments)
+					.where(
+						and(
+							eq(deployments.projectId, id),
+							ne(deployments.status, "deleted"),
+						),
+					)
+					.limit(1);
+				if (remaining) {
+					throw new ApiError(
+						409,
+						"conflict",
+						"Delete the project's deployments first",
+					);
+				}
+				await tx.delete(projects).where(eq(projects.id, id));
+			});
 			return reply.status(204).send(null);
 		},
 	);

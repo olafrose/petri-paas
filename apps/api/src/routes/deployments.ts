@@ -23,10 +23,17 @@ import {
 	type Transaction,
 	withTransaction,
 } from "@petri/database";
-import { availableActions } from "@petri/deployment-core";
-import type { JobQueue } from "@petri/jobs";
+import {
+	actionTarget,
+	availableActions,
+	canPerform,
+	changeStatus,
+	type DeploymentAction,
+} from "@petri/deployment-core";
+import type { JobName, JobQueue } from "@petri/jobs";
 import { and, asc, desc, eq, gt, inArray, type SQL } from "drizzle-orm";
 import type { FastifyPluginAsyncZod } from "fastify-type-provider-zod";
+import type { Principal } from "../access.ts";
 import { ApiError } from "../errors.ts";
 import { slugify } from "../slug.ts";
 
@@ -207,6 +214,72 @@ export async function createDeployment(
 	}
 }
 
+/** The owner's actions handled here, with the job doing the work. */
+type LifecycleAction = Exclude<DeploymentAction, "redeploy">;
+
+const ACTIONS: Record<
+	LifecycleAction,
+	{ job: JobName; message: string; done: string }
+> = {
+	stop: { job: "deployment.stop", message: "Stopped", done: "stopped" },
+	start: {
+		job: "deployment.start",
+		message: "Starting the app",
+		done: "started",
+	},
+	delete: { job: "deployment.delete", message: "Deleting", done: "deleted" },
+};
+
+/**
+ * Applies an action: the new status, its history entry and the job that
+ * carries it out, in one transaction. Refused unless the deployment's
+ * current status offers the action.
+ */
+async function performAction(
+	db: Database,
+	jobs: JobQueue,
+	deploymentId: string,
+	action: LifecycleAction,
+	principal: Principal | null,
+): Promise<Deployment> {
+	const row = await withTransaction(db, async (tx) => {
+		const [current] = await tx
+			.select({ status: deployments.status })
+			.from(deployments)
+			.where(eq(deployments.id, deploymentId))
+			.for("update");
+		if (!current) throw new ApiError(404, "not_found", "Deployment not found");
+		if (!canPerform(action, current.status)) {
+			throw new ApiError(
+				409,
+				"conflict",
+				`A deployment that is "${current.status}" cannot be ${ACTIONS[action].done}`,
+			);
+		}
+
+		await changeStatus(tx, deploymentId, actionTarget(action), {
+			message: ACTIONS[action].message,
+			data: { action, requestedBy: requestedBy(principal) },
+		});
+		await jobs.send(ACTIONS[action].job, { deploymentId }, { transaction: tx });
+		const [updated] = await tx
+			.select()
+			.from(deployments)
+			.where(eq(deployments.id, deploymentId));
+		return updated as DeploymentRow;
+	});
+	const latest = await latestBuilds(db, [row.id]);
+	return toDeployment(row, latest.get(row.id));
+}
+
+/** Who asked, for the history. */
+function requestedBy(principal: Principal | null) {
+	if (principal?.type === "apiKey") {
+		return { type: "apiKey", apiKeyId: principal.apiKeyId };
+	}
+	return { type: "owner" };
+}
+
 export const deploymentRoutes: FastifyPluginAsyncZod<{
 	db: Database;
 	jobs: JobQueue;
@@ -346,6 +419,77 @@ export const deploymentRoutes: FastifyPluginAsyncZod<{
 					createdAt: row.createdAt.toISOString(),
 				})),
 			};
+		},
+	);
+
+	const actionSchema = (summary: string, description: string) => ({
+		tags,
+		summary,
+		description,
+		params: idParams,
+		response: { 202: deployment, 404: errorResponse, 409: errorResponse },
+	});
+
+	app.post(
+		"/deployments/:id/stop",
+		{
+			config: { access: { scope: "deploy:update" } },
+			schema: actionSchema(
+				"Stop a deployment",
+				"Stops the app; its container and image are kept, so starting it again needs no rebuild. Only from `ready`.",
+			),
+		},
+		async (request, reply) => {
+			const result = await performAction(
+				db,
+				jobs,
+				request.params.id,
+				"stop",
+				request.principal,
+			);
+			return reply.status(202).send(result);
+		},
+	);
+
+	app.post(
+		"/deployments/:id/start",
+		{
+			config: { access: { scope: "deploy:update" } },
+			schema: actionSchema(
+				"Start a stopped deployment",
+				"Starts the app again without a rebuild and health-checks it, as on its first start. Only from `stopped`. Follow progress with the events endpoint.",
+			),
+		},
+		async (request, reply) => {
+			const result = await performAction(
+				db,
+				jobs,
+				request.params.id,
+				"start",
+				request.principal,
+			);
+			return reply.status(202).send(result);
+		},
+	);
+
+	app.delete(
+		"/deployments/:id",
+		{
+			config: { access: { scope: "deploy:delete" } },
+			schema: actionSchema(
+				"Delete a deployment",
+				"Removes the app's container, network and image, and a running build. The deployment stays listed with its history, as `deleted`.",
+			),
+		},
+		async (request, reply) => {
+			const result = await performAction(
+				db,
+				jobs,
+				request.params.id,
+				"delete",
+				request.principal,
+			);
+			return reply.status(202).send(result);
 		},
 	);
 };
