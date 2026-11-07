@@ -263,6 +263,18 @@ export class DockerRuntime {
 		);
 	}
 
+	/**
+	 * Restarts the app if it crashes or the host reboots. Call once the app
+	 * passed its health check.
+	 */
+	async enableRestarts(deploymentId: string): Promise<void> {
+		await this.#docker.call(
+			"POST",
+			`/containers/${containerName(deploymentId)}/update`,
+			{ json: { RestartPolicy: { Name: "unless-stopped" } } },
+		);
+	}
+
 	async stop(deploymentId: string, timeoutSeconds = 10): Promise<void> {
 		await this.#docker.call(
 			"POST",
@@ -345,7 +357,10 @@ export function createBody(spec: ContainerSpec) {
 			Devices: [],
 			// Reaps zombie processes; apps don't need their own init.
 			Init: true,
-			RestartPolicy: { Name: "unless-stopped" },
+			// No restarts until the app proved healthy (see enableRestarts):
+			// otherwise a crash on start becomes an endless restart loop
+			// that looks like a running app.
+			RestartPolicy: { Name: "no" },
 			LogConfig: {
 				Type: "json-file",
 				Config: { "max-size": "10m", "max-file": "3" },

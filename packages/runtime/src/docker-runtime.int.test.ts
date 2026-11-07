@@ -202,6 +202,21 @@ describe("containers", { timeout: 60_000 }, () => {
 		expect((await runtime.inspect(id))?.buildId).toBe("build-2");
 	});
 
+	test("restart automatically only once enabled", async () => {
+		const id = deployment();
+		await runWeb(id);
+		const policy = async () =>
+			(
+				await docker.call<{ HostConfig: { RestartPolicy: { Name: string } } }>(
+					"GET",
+					`/containers/petri-${id}/json`,
+				)
+			).body.HostConfig.RestartPolicy.Name;
+		expect(await policy()).toBe("no");
+		await runtime.enableRestarts(id);
+		expect(await policy()).toBe("unless-stopped");
+	});
+
 	test("stop, start and remove", async () => {
 		const id = deployment();
 		await runWeb(id);
@@ -226,7 +241,6 @@ describe("containers", { timeout: 60_000 }, () => {
 			network,
 		});
 		await runtime.start(id);
-		// "unless-stopped" restarts it; catch it between attempts.
 		await vi.waitFor(
 			async () => {
 				const state = await runtime.inspect(id);

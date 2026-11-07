@@ -231,6 +231,7 @@ export function deploymentRunHandler(deps: {
 				throw new StepFailure(healthy.reason);
 			}
 
+			await runtime.enableRestarts(deploymentId);
 			await advance("ready", "Ready");
 			await db
 				.update(builds)
