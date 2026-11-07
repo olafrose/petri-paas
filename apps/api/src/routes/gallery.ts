@@ -1,5 +1,6 @@
 import { type GalleryItem, gallery } from "@petri/contracts";
 import { type Database, deployments, projects } from "@petri/database";
+import { previewUrl } from "@petri/deployment-core";
 import { and, desc, eq } from "drizzle-orm";
 import type { FastifyPluginAsyncZod } from "fastify-type-provider-zod";
 
@@ -7,10 +8,10 @@ import type { FastifyPluginAsyncZod } from "fastify-type-provider-zod";
  * The public gallery: public projects whose featured deployment is ready.
  * No authentication; returns only the fields in `galleryItem`.
  */
-export const galleryRoutes: FastifyPluginAsyncZod<{ db: Database }> = async (
-	app,
-	{ db },
-) => {
+export const galleryRoutes: FastifyPluginAsyncZod<{
+	db: Database;
+	previewBaseUrl: string;
+}> = async (app, { db, previewBaseUrl }) => {
 	app.get(
 		"/gallery",
 		{
@@ -30,6 +31,7 @@ export const galleryRoutes: FastifyPluginAsyncZod<{ db: Database }> = async (
 					description: projects.description,
 					updatedAt: projects.updatedAt,
 					deploymentName: deployments.name,
+					subdomain: deployments.subdomain,
 				})
 				.from(projects)
 				.innerJoin(
@@ -49,7 +51,11 @@ export const galleryRoutes: FastifyPluginAsyncZod<{ db: Database }> = async (
 				name: row.name,
 				description: row.description,
 				updatedAt: row.updatedAt.toISOString(),
-				deployment: { name: row.deploymentName, status: "ready" },
+				deployment: {
+					name: row.deploymentName,
+					status: "ready",
+					url: previewUrl(previewBaseUrl, row.subdomain),
+				},
 			}));
 			return { items };
 		},

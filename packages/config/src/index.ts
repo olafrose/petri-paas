@@ -19,6 +19,16 @@ export const databaseSchema = z.object({
 		),
 });
 
+/** Variables for services that work with preview addresses. */
+export const previewSchema = z.object({
+	PREVIEW_BASE_URL: z
+		.url({ protocol: /^https?$/ })
+		.default("http://app.localhost:8088")
+		.describe(
+			"Previews are served at <subdomain>.<this host>, e.g. https://app.example.com",
+		),
+});
+
 export class ConfigError extends Error {
 	readonly issues: readonly string[];
 

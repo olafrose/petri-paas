@@ -45,6 +45,7 @@ services:
     environment:
       <<: *database-env
       PUBLIC_URL: ${PUBLIC_URL:?Set PUBLIC_URL}
+      PREVIEW_BASE_URL: ${PREVIEW_BASE_URL:?Set PREVIEW_BASE_URL}
       AUTH_SECRET: ${AUTH_SECRET:?Set AUTH_SECRET}
       # Requests arrive through the web container on the internal network.
       TRUST_PROXY: ${PETRI_SUBNET:-172.31.250.0/24}
@@ -78,6 +79,10 @@ services:
     environment:
       <<: *database-env
       WORKER_CONTAINER: petri-worker
+      PREVIEW_BASE_URL: ${PREVIEW_BASE_URL:?Set PREVIEW_BASE_URL}
+      EDGE_ADMIN_SOCKET: /run/petri-edge/admin.sock
+      EDGE_CONTAINER: petri-edge
+      EDGE_TRUSTED_PROXIES: ${EDGE_TRUSTED_PROXIES:-}
     networks: [internal, build, docker]
     volumes:
       - uploads:/var/lib/petri/uploads
@@ -87,6 +92,8 @@ services:
     depends_on:
       # The API applies database migrations on startup.
       api:
+        condition: service_healthy
+      edge:
         condition: service_healthy
     stop_grace_period: 40s
 
@@ -133,6 +140,8 @@ services:
   edge:
     image: caddy:2.11.9-alpine
     restart: unless-stopped
+    # A fixed name: it joins each routed app's network by this name.
+    container_name: petri-edge
     command: [caddy, run, --config, /etc/caddy/edge.json]
     # The worker's user (node), so it can use the admin socket.
     user: "1000:1000"

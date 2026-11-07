@@ -15,15 +15,11 @@ import {
 	errorResponse,
 	uploadDeploymentSettings,
 } from "@petri/contracts";
-import type { Database } from "@petri/database";
-import type { JobQueue } from "@petri/jobs";
 import type { FastifyPluginAsync } from "fastify";
 import { ApiError } from "../errors.ts";
-import { createDeployment } from "./deployments.ts";
+import { createDeployment, type DeploymentDeps } from "./deployments.ts";
 
-export interface UploadOptions {
-	db: Database;
-	jobs: JobQueue;
+export interface UploadOptions extends DeploymentDeps {
 	/** Where archives are kept, so deployments can be rebuilt later. */
 	uploadsDir: string;
 	maxUploadBytes?: number;
@@ -42,6 +38,7 @@ export const uploadRoutes: FastifyPluginAsync<UploadOptions> = async (
 	{
 		db,
 		jobs,
+		previewBaseUrl,
 		uploadsDir,
 		maxUploadBytes = DEFAULT_MAX_UPLOAD_BYTES,
 		zipLimits = DEFAULT_ZIP_LIMITS,
@@ -126,18 +123,21 @@ export const uploadRoutes: FastifyPluginAsync<UploadOptions> = async (
 				}
 				await rename(partialPath, finalPath);
 
-				const created = await createDeployment(db, jobs, {
-					project: settings.project,
-					name: settings.name ?? "upload",
-					subdomain: settings.subdomain,
-					source: {
-						type: "zip",
-						uploadId,
-						...(settings.directory && { directory: settings.directory }),
+				const created = await createDeployment(
+					{ db, jobs, previewBaseUrl },
+					{
+						project: settings.project,
+						name: settings.name ?? "upload",
+						subdomain: settings.subdomain,
+						source: {
+							type: "zip",
+							uploadId,
+							...(settings.directory && { directory: settings.directory }),
+						},
+						build: settings.build,
+						lifecycle: settings.lifecycle,
 					},
-					build: settings.build,
-					lifecycle: settings.lifecycle,
-				});
+				);
 				return reply
 					.status(201)
 					.header("location", `/api/v1/deployments/${created.id}`)

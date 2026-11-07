@@ -1,6 +1,6 @@
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { commonSchema, databaseSchema } from "@petri/config";
+import { commonSchema, databaseSchema, previewSchema } from "@petri/config";
 import { z } from "zod";
 
 const OIDC_VARIABLES = [
@@ -11,6 +11,7 @@ const OIDC_VARIABLES = [
 
 export const apiConfigSchema = commonSchema
 	.extend(databaseSchema.shape)
+	.extend(previewSchema.shape)
 	.extend({
 		/** Defaults to loopback; set to 0.0.0.0 inside a container. */
 		API_HOST: z.string().default("127.0.0.1"),

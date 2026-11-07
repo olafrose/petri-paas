@@ -177,6 +177,11 @@ export const builds = pgTable(
 		/** Git commit that was built (Git sources only). */
 		commit: text(),
 		imageId: text(),
+		/**
+		 * Port the app answers on: the deployment's port, or the one the
+		 * image declares. Routes to the app use it.
+		 */
+		port: integer(),
 		/** Path of the stored build log. */
 		logPath: text(),
 		errorMessage: text(),

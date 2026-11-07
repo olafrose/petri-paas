@@ -35,6 +35,8 @@ export interface AppOptions {
 	uploads: Pick<UploadOptions, "uploadsDir" | "maxUploadBytes" | "zipLimits">;
 	/** Public URL of the admin panel, e.g. https://petri.example.com. */
 	publicUrl: string;
+	/** Previews are served at <subdomain>.<this URL's host>. */
+	previewBaseUrl: string;
 	/** Reverse proxies whose X-Forwarded-For is trusted. */
 	trustProxy?: string[];
 	logger?: FastifyServerOptions["logger"];
@@ -49,6 +51,7 @@ export async function buildApp({
 	logsDir,
 	uploads,
 	publicUrl,
+	previewBaseUrl,
 	trustProxy = [],
 	logger = false,
 }: AppOptions) {
@@ -91,11 +94,17 @@ export async function buildApp({
 	const prefix = "/api/v1";
 	await app.register(healthRoutes, { prefix, db });
 	await app.register(authRoutes, { prefix, auth, publicUrl });
-	await app.register(galleryRoutes, { prefix, db });
+	await app.register(galleryRoutes, { prefix, db, previewBaseUrl });
 	await app.register(projectRoutes, { prefix, db });
-	await app.register(deploymentRoutes, { prefix, db, jobs });
+	await app.register(deploymentRoutes, { prefix, db, jobs, previewBaseUrl });
 	await app.register(deploymentLiveRoutes, { prefix, db, events, logsDir });
-	await app.register(uploadRoutes, { prefix, db, jobs, ...uploads });
+	await app.register(uploadRoutes, {
+		prefix,
+		db,
+		jobs,
+		previewBaseUrl,
+		...uploads,
+	});
 	await app.register(apiKeyRoutes, { prefix, db });
 
 	return app;

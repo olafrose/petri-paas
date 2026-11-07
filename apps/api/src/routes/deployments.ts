@@ -29,6 +29,7 @@ import {
 	canPerform,
 	changeStatus,
 	type DeploymentAction,
+	previewUrl,
 } from "@petri/deployment-core";
 import type { JobName, JobQueue } from "@petri/jobs";
 import { and, asc, desc, eq, gt, inArray, type SQL } from "drizzle-orm";
@@ -43,15 +44,25 @@ type BuildRow = typeof builds.$inferSelect;
 const HOUR_MS = 60 * 60 * 1000;
 const MAX_LABEL = 63;
 
+/** What the deployment routes and functions work with. */
+export interface DeploymentDeps {
+	db: Database;
+	jobs: JobQueue;
+	/** Previews are served at <subdomain>.<this URL's host>. */
+	previewBaseUrl: string;
+}
+
 function toDeployment(
 	row: DeploymentRow,
 	build: BuildRow | undefined,
+	previewBaseUrl: string,
 ): Deployment {
 	return {
 		id: row.id,
 		projectId: row.projectId,
 		name: row.name,
 		subdomain: row.subdomain,
+		url: previewUrl(previewBaseUrl, row.subdomain),
 		status: row.status,
 		source: row.source,
 		build: {
@@ -143,8 +154,7 @@ export interface NewDeployment {
  * that wasn't saved.
  */
 export async function createDeployment(
-	db: Database,
-	jobs: JobQueue,
+	{ db, jobs, previewBaseUrl }: DeploymentDeps,
 	input: NewDeployment,
 ): Promise<Deployment> {
 	const expiresAt =
@@ -201,7 +211,7 @@ export async function createDeployment(
 			});
 			return { row, build };
 		});
-		return toDeployment(row, build);
+		return toDeployment(row, build, previewBaseUrl);
 	} catch (error) {
 		if (isConstraintViolation(error, "deployments_subdomain_unique")) {
 			throw new ApiError(
@@ -236,8 +246,7 @@ const ACTIONS: Record<
  * current status offers the action.
  */
 async function performAction(
-	db: Database,
-	jobs: JobQueue,
+	{ db, jobs, previewBaseUrl }: DeploymentDeps,
 	deploymentId: string,
 	action: LifecycleAction,
 	principal: Principal | null,
@@ -269,7 +278,7 @@ async function performAction(
 		return updated as DeploymentRow;
 	});
 	const latest = await latestBuilds(db, [row.id]);
-	return toDeployment(row, latest.get(row.id));
+	return toDeployment(row, latest.get(row.id), previewBaseUrl);
 }
 
 /** Who asked, for the history. */
@@ -280,10 +289,11 @@ function requestedBy(principal: Principal | null) {
 	return { type: "owner" };
 }
 
-export const deploymentRoutes: FastifyPluginAsyncZod<{
-	db: Database;
-	jobs: JobQueue;
-}> = async (app, { db, jobs }) => {
+export const deploymentRoutes: FastifyPluginAsyncZod<DeploymentDeps> = async (
+	app,
+	deps,
+) => {
+	const { db, previewBaseUrl } = deps;
 	const tags = ["deployments"];
 
 	app.post(
@@ -301,7 +311,7 @@ export const deploymentRoutes: FastifyPluginAsyncZod<{
 		},
 		async (request, reply) => {
 			const body = request.body;
-			const created = await createDeployment(db, jobs, {
+			const created = await createDeployment(deps, {
 				project: body.project,
 				name: body.name ?? body.source.ref,
 				subdomain: body.subdomain,
@@ -350,7 +360,9 @@ export const deploymentRoutes: FastifyPluginAsyncZod<{
 				rows.map((row) => row.id),
 			);
 			return {
-				items: rows.map((row) => toDeployment(row, latest.get(row.id))),
+				items: rows.map((row) =>
+					toDeployment(row, latest.get(row.id), previewBaseUrl),
+				),
 			};
 		},
 	);
@@ -373,7 +385,7 @@ export const deploymentRoutes: FastifyPluginAsyncZod<{
 				.where(eq(deployments.id, request.params.id));
 			if (!row) throw new ApiError(404, "not_found", "Deployment not found");
 			const latest = await latestBuilds(db, [row.id]);
-			return toDeployment(row, latest.get(row.id));
+			return toDeployment(row, latest.get(row.id), previewBaseUrl);
 		},
 	);
 
@@ -441,8 +453,7 @@ export const deploymentRoutes: FastifyPluginAsyncZod<{
 		},
 		async (request, reply) => {
 			const result = await performAction(
-				db,
-				jobs,
+				deps,
 				request.params.id,
 				"stop",
 				request.principal,
@@ -462,8 +473,7 @@ export const deploymentRoutes: FastifyPluginAsyncZod<{
 		},
 		async (request, reply) => {
 			const result = await performAction(
-				db,
-				jobs,
+				deps,
 				request.params.id,
 				"start",
 				request.principal,
@@ -483,8 +493,7 @@ export const deploymentRoutes: FastifyPluginAsyncZod<{
 		},
 		async (request, reply) => {
 			const result = await performAction(
-				db,
-				jobs,
+				deps,
 				request.params.id,
 				"delete",
 				request.principal,

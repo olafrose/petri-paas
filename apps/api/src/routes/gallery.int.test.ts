@@ -62,7 +62,11 @@ test("is public and lists only public projects with a ready featured deployment"
 	expect(response.statusCode).toBe(200);
 	const { items } = response.json<Gallery>();
 	expect(items.map((item) => item.slug)).toEqual(["shown"]);
-	expect(items[0]?.deployment).toEqual({ name: "main", status: "ready" });
+	expect(items[0]?.deployment).toEqual({
+		name: "main",
+		status: "ready",
+		url: "https://shown.app.example.com/",
+	});
 });
 
 test("never exposes notes, sources or ids", async () => {

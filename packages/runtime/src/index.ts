@@ -7,6 +7,7 @@ export {
 export {
 	type ContainerSpec,
 	type ContainerState,
+	containerName,
 	createBody,
 	DEFAULT_LIMITS,
 	DockerRuntime,

@@ -49,6 +49,7 @@ describe("POST /deployments", () => {
 		expect(deployment).toMatchObject({
 			name: "main",
 			subdomain: "demo-main",
+			url: "https://demo-main.app.example.com/",
 			status: "queued",
 			source: minimal.source,
 			build: { strategy: "auto", port: null, args: {} },

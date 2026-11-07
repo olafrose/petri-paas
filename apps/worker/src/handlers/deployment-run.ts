@@ -16,12 +16,14 @@ import {
 import {
 	InvalidTransitionError,
 	isBuildStep,
+	previewUrl,
 	updateStatus,
 } from "@petri/deployment-core";
 import type { JobHandler } from "@petri/jobs";
 import { DockerApiError, type DockerRuntime } from "@petri/runtime";
 import { eq } from "drizzle-orm";
 import type { Logger } from "pino";
+import type { EdgeRouting } from "../edge-routing.ts";
 import {
 	imageName as buildImageName,
 	checkHealth,
@@ -54,10 +56,11 @@ export interface DeploymentRunSettings extends HealthSettings {
 export function deploymentRunHandler(deps: {
 	db: Database;
 	runtime: DockerRuntime;
+	edge: EdgeRouting;
 	log: Logger;
 	settings: DeploymentRunSettings;
 }): JobHandler<"deployment.run"> {
-	const { db, runtime, settings } = deps;
+	const { db, runtime, edge, settings } = deps;
 
 	return async (job) => {
 		const { deploymentId, buildId } = job.data;
@@ -95,7 +98,12 @@ export function deploymentRunHandler(deps: {
 		const imageName = buildImageName(deploymentId, buildId);
 		const logPath = join(settings.logsDir, `${buildId}.log`);
 		let current: DeploymentStatus = "queued";
-		const created = { container: false, network: false, image: false };
+		const created: Created = {
+			container: false,
+			network: false,
+			image: false,
+			route: false,
+		};
 
 		await rm(workspace, { recursive: true, force: true });
 		await mkdir(source, { recursive: true });
@@ -174,6 +182,7 @@ export function deploymentRunHandler(deps: {
 				deployment.internalPort,
 				note,
 			);
+			await db.update(builds).set({ port }).where(eq(builds.id, buildId));
 			const network = await runtime.ensureNetwork(deploymentId);
 			created.network = true;
 			const containerId = await runtime.createContainer({
@@ -208,15 +217,26 @@ export function deploymentRunHandler(deps: {
 				throw new StepFailure(healthy.reason);
 			}
 
+			// Routed only now: a broken app is never reachable.
 			await runtime.enableRestarts(deploymentId);
-			await advance("ready", "Ready");
+			created.route = true;
+			const routeId = await edge.publish(deployment, port);
+			const url = previewUrl(
+				edge.settings.previewBaseUrl,
+				deployment.subdomain,
+			);
+			await advance("ready", `Ready at ${url}`, {
+				message: "",
+				data: { url },
+				updates: { routeId },
+			});
 			await db
 				.update(builds)
 				.set({ status: "succeeded", finishedAt: new Date(), imageId })
 				.where(eq(builds.id, buildId));
 			log.info("deployment ready");
 		} catch (error) {
-			await removeCreated(runtime, deploymentId, imageName, created, log);
+			await removeCreated(runtime, edge, deploymentId, imageName, created, log);
 
 			const [now] = await db
 				.select({ status: deployments.status })
@@ -288,14 +308,25 @@ function watchStatus(
 	};
 }
 
+/** What this attempt created, so a failure removes exactly that. */
+interface Created {
+	container: boolean;
+	network: boolean;
+	image: boolean;
+	route: boolean;
+}
+
 async function removeCreated(
 	runtime: DockerRuntime,
+	edge: EdgeRouting,
 	deploymentId: string,
 	imageName: string,
-	created: { container: boolean; network: boolean; image: boolean },
+	created: Created,
 	log: Logger,
 ) {
 	try {
+		// First: the edge proxy on the network keeps it from being removed.
+		if (created.route) await edge.unpublish(deploymentId);
 		if (created.container) await runtime.removeContainer(deploymentId);
 		if (created.network) await runtime.removeNetwork(deploymentId);
 		if (created.image) await runtime.removeImage(imageName);

@@ -291,6 +291,9 @@ importers:
       '@petri/deployment-core':
         specifier: workspace:*
         version: link:../../packages/deployment-core
+      '@petri/edge-proxy':
+        specifier: workspace:*
+        version: link:../../packages/edge-proxy
       '@petri/jobs':
         specifier: workspace:*
         version: link:../../packages/jobs
