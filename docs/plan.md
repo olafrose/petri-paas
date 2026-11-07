@@ -16,14 +16,19 @@ acceptance criteria pass and CI is green.
 
   Environment    Machine                       Architecture   Purpose
   -------------- ----------------------------- -------------- ----------------------------
-  Development    Raspberry Pi, 4 GB RAM        arm64          Coding, unit and local tests
+  Development    Proxmox VM, 4 vCPU, 8 GB RAM  amd64          Coding, unit and integration tests
   CI             GitHub Actions runners        amd64          Checks, tests, image builds
   Production     Proxmox VM (x86-64-v3)        amd64          petri. host
 
-The development machine runs Docker Compose with only the services
-needed for the current task. If 4 GB turns out to be too little
-(expected first in phase 2, when BuildKit builds run), the options are
-to enable zram swap or point the Docker CLI at a remote Docker host.
+The development machine runs the services from
+`infrastructure/compose/dev.yml` (PostgreSQL, BuildKit, the Docker socket
+proxy, the edge proxy) and, since 3.3, the same egress firewall as
+production.
+
+**Changed:** phases 1 and 2 were developed on a Raspberry Pi 5 (arm64,
+4 GB RAM). Development moved to a Proxmox VM for more room to run the
+integration tests, which build and run images. Development, CI and
+production now share one architecture.
 
 ------------------------------------------------------------------------
 
