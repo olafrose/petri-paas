@@ -2,6 +2,7 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { CreatedApiKey, Scope } from "@petri/contracts";
+import { EventListener } from "@petri/database";
 import { useTestDatabase } from "@petri/database/testing";
 import { JobQueue } from "@petri/jobs";
 import type { InjectOptions, LightMyRequestResponse } from "fastify";
@@ -32,6 +33,8 @@ export function useTestApp() {
 		secret: "test-secret-that-is-at-least-32-characters-long",
 	});
 	const uploadsDir = mkdtempSync(join(tmpdir(), "petri-test-uploads-"));
+	const logsDir = mkdtempSync(join(tmpdir(), "petri-test-logs-"));
+	let events: EventListener;
 	let app: Awaited<ReturnType<typeof buildApp>>;
 	let jobs: JobQueue;
 	let cookie: string | undefined;
@@ -41,10 +44,14 @@ export function useTestApp() {
 			connectionString: inject("databaseUrl"),
 			maxConnections: 2,
 		});
+		events = new EventListener(inject("databaseUrl"));
+		await events.start();
 		app = await buildApp({
 			db,
 			auth,
 			jobs,
+			events,
+			logsDir,
 			uploads: { uploadsDir, maxUploadBytes: 1024 * 1024 },
 			publicUrl,
 		});
@@ -58,7 +65,9 @@ export function useTestApp() {
 	afterAll(async () => {
 		await app.close();
 		await jobs.stop({ timeoutMs: 1000 });
+		await events.stop();
 		rmSync(uploadsDir, { recursive: true, force: true });
+		rmSync(logsDir, { recursive: true, force: true });
 	});
 
 	async function ownerCookie(): Promise<string> {
@@ -84,6 +93,8 @@ export function useTestApp() {
 		auth,
 		/** Upload directory; uploads are limited to 1 MB in tests. */
 		uploadsDir,
+		/** Build log directory, as the worker would write it. */
+		logsDir,
 		get jobs() {
 			return jobs;
 		},

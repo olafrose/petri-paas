@@ -37,6 +37,8 @@ export const apiConfigSchema = commonSchema
 		 * The default suits development only: it may be cleared on reboot.
 		 */
 		UPLOADS_DIR: z.string().default(join(tmpdir(), "petri-uploads")),
+		/** Build logs written by the worker (shared, read-only here). */
+		LOGS_DIR: z.string().default(join(tmpdir(), "petri-logs")),
 		OIDC_ISSUER: z.url().optional(),
 		OIDC_CLIENT_ID: z.string().min(1).optional(),
 		OIDC_CLIENT_SECRET: z.string().min(1).optional(),
