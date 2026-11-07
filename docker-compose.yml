@@ -194,8 +194,11 @@ networks:
       config:
         - subnet: ${PETRI_SUBNET:-172.31.250.0/24}
   # Worker ↔ BuildKit only. Builds reach the internet (base images,
-  # packages) through it.
+  # packages) through it, and nothing private: the host interface name is
+  # what infrastructure/firewall/petri.nft filters on.
   build:
+    driver_opts:
+      com.docker.network.bridge.name: pb-build
   # Worker ↔ Docker socket proxy only; no internet access needed.
   docker:
     internal: true

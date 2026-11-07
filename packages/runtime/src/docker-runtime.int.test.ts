@@ -20,6 +20,7 @@ import {
 } from "vitest";
 import { DockerApiError, DockerClient } from "./docker-client.ts";
 import {
+	bridgeName,
 	createBody,
 	DockerRuntime,
 	KEPT_CAPABILITIES,
@@ -122,6 +123,18 @@ describe("images and networks", { timeout: 60_000 }, () => {
 		const first = await runtime.ensureNetwork(id);
 		const second = await runtime.ensureNetwork(id);
 		expect(second).toBe(first);
+	});
+
+	test("its host interface is named for the firewall", async () => {
+		const id = deployment();
+		const network = await runtime.ensureNetwork(id);
+		const { body } = await docker.call<{ Options: Record<string, string> }>(
+			"GET",
+			`/networks/${network}`,
+		);
+		const bridge = body.Options["com.docker.network.bridge.name"];
+		expect(bridge).toBe(bridgeName(id));
+		expect(bridge).toMatch(/^pa-[0-9a-f]{12}$/);
 	});
 });
 

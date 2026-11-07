@@ -36,7 +36,7 @@ jobs:
   integration:
     name: Integration
     runs-on: ubuntu-24.04
-    timeout-minutes: 15
+    timeout-minutes: 20
     services:
       postgres:
         image: postgres:18-alpine
@@ -65,7 +65,10 @@ jobs:
       - name: Start BuildKit
         run: |
           sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
-          docker run -d --name buildkitd \
+          # On its own network, as in Compose, for the firewall below.
+          docker network create \
+            -o com.docker.network.bridge.name=pb-build petri-build
+          docker run -d --name buildkitd --network petri-build \
             --security-opt seccomp=unconfined \
             --security-opt apparmor=unconfined \
             --security-opt systempaths=unconfined \
@@ -114,6 +117,28 @@ jobs:
           done
           docker logs edge
           exit 1
+
+      # Egress filtering as on a petri. host (infrastructure/firewall).
+      # The probe must catch the leaks without it and pass with it; the
+      # integration tests then run under it. 169.254.169.254 is the
+      # runner's cloud metadata service: a real target that must be blocked.
+      - name: Egress probe without the firewall (must fail)
+        env:
+          PROBE_BUILD_NETWORK: petri-build
+          PROBE_LAN_TARGETS: 169.254.169.254 80
+        run: "! scripts/probe-egress.sh"
+
+      - name: Install the firewall
+        run: |
+          command -v nft || sudo apt-get install -y -q nftables
+          sudo scripts/install-firewall.sh
+          systemctl is-active petri-firewall.service
+
+      - name: Egress probe with the firewall
+        env:
+          PROBE_BUILD_NETWORK: petri-build
+          PROBE_LAN_TARGETS: 169.254.169.254 80
+        run: scripts/probe-egress.sh
 
       - uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6.1.1
 

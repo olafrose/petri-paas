@@ -1,0 +1,83 @@
+#!/usr/sbin/nft -f
+#
+# Egress filtering for petri.: what apps and builds may reach.
+#
+# Traffic from the host interfaces of app networks ("pa-*", see
+# APP_BRIDGE_PREFIX in packages/runtime) and of the build network
+# ("pb-build") may reach the public internet, but not:
+#   - private and special-purpose addresses: the LAN, the NPM VM, the
+#     router, other homelab services, cloud metadata (169.254.169.254)
+#   - the host itself, on any of its addresses
+# Replies to connections made from outside (the edge proxy or the worker
+# talking to an app) are not affected, nor is traffic within one app
+# network. Docker already keeps app networks apart from each other.
+#
+# Docker manages its own tables and never touches this one. Applied by
+# petri-firewall.service; reapplying replaces the previous version.
+
+table inet petri
+delete table inet petri
+
+table inet petri {
+	# Kept in step with packages/build-engine/src/source/address-policy.ts.
+	set blocked_ipv4 {
+		type ipv4_addr
+		flags interval
+		elements = {
+			0.0.0.0/8,       # "this network"
+			10.0.0.0/8,      # private
+			100.64.0.0/10,   # carrier-grade NAT
+			127.0.0.0/8,     # loopback
+			169.254.0.0/16,  # link-local, incl. cloud metadata
+			172.16.0.0/12,   # private
+			192.0.0.0/24,    # IETF protocol assignments
+			192.0.2.0/24,    # documentation
+			192.88.99.0/24,  # 6to4 relay
+			192.168.0.0/16,  # private
+			198.18.0.0/15,   # benchmarking
+			198.51.100.0/24, # documentation
+			203.0.113.0/24,  # documentation
+			224.0.0.0/4,     # multicast
+			240.0.0.0/4,     # reserved, incl. broadcast
+		}
+	}
+
+	# Only global unicast (2000::/3) is public, minus these.
+	set blocked_ipv6 {
+		type ipv6_addr
+		flags interval
+		elements = {
+			2001::/23,       # IETF special purpose, incl. Teredo
+			2001:db8::/32,   # documentation
+			2002::/16,       # 6to4 (embeds IPv4)
+		}
+	}
+
+	chain untrusted_out {
+		# Replies and related traffic (ICMP errors) of allowed connections.
+		ct state established,related return
+		ip daddr @blocked_ipv4 counter drop
+		ip6 daddr != 2000::/3 counter drop
+		ip6 daddr @blocked_ipv6 counter drop
+	}
+
+	chain forward {
+		# Before Docker's own rules, which would accept this traffic.
+		type filter hook forward priority filter - 10; policy accept;
+
+		# Leaving an app or build network, i.e. not just between two
+		# containers on the same one.
+		iifname "pa-*" oifname != "pa-*" jump untrusted_out
+		iifname "pb-build" oifname != "pb-build" jump untrusted_out
+	}
+
+	chain input {
+		type filter hook input priority filter - 10; policy accept;
+
+		# Apps and builds open no connections to the host. DNS is not
+		# affected: containers ask Docker's resolver inside their own
+		# network namespace.
+		iifname "pa-*" ct state new counter drop
+		iifname "pb-build" ct state new counter drop
+	}
+}
