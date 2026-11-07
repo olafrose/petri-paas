@@ -287,6 +287,14 @@ crashes on start or listens on the wrong port fails with a clear reason.
 **Done when:** a client connecting mid-deployment sees every event
 exactly once, in order.
 
+**Changed:** runtime logs (the app's own output) are not served by the
+API in this task. The API has no Docker access by design; even read-only
+access would let it inspect every container, including petri.'s own
+secrets. Proposed instead: the API asks the worker for the last lines
+through the job queue, and the worker writes them to the shared logs
+volume. Until then, the app's last output on a failed start is in the
+build log (task 2.7).
+
 ### 2.9 Stop, start and delete
 
 -   `POST /deployments/:id/stop`, `POST /deployments/:id/start`,

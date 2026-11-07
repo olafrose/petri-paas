@@ -53,6 +53,8 @@ services:
       OIDC_CLIENT_SECRET: ${OIDC_CLIENT_SECRET:-}
     volumes:
       - uploads:/var/lib/petri/uploads
+      # Build logs written by the worker; the API only reads them.
+      - build-logs:/var/lib/petri/logs:ro
     depends_on:
       postgres:
         condition: service_healthy

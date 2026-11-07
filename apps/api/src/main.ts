@@ -1,5 +1,9 @@
 import { loadConfigOrExit } from "@petri/config";
-import { createDatabase, migrateDatabase } from "@petri/database";
+import {
+	createDatabase,
+	EventListener,
+	migrateDatabase,
+} from "@petri/database";
 import { JobQueue } from "@petri/jobs";
 import { buildApp } from "./app.ts";
 import { createAuth } from "./auth/auth.ts";
@@ -19,10 +23,14 @@ const jobs = await JobQueue.start({
 	connectionString: config.DATABASE_URL,
 	maxConnections: 2,
 });
+const events = new EventListener(config.DATABASE_URL);
+await events.start();
 const app = await buildApp({
 	db,
 	auth,
 	jobs,
+	events,
+	logsDir: config.LOGS_DIR,
 	uploads: { uploadsDir: config.UPLOADS_DIR },
 	publicUrl: config.PUBLIC_URL,
 	trustProxy: config.TRUST_PROXY,
@@ -34,6 +42,7 @@ for (const signal of ["SIGINT", "SIGTERM"] as const) {
 		app.log.info({ signal }, "shutting down");
 		await app.close();
 		await jobs.stop();
+		await events.stop();
 		await db.$client.end();
 	});
 }

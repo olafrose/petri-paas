@@ -40,7 +40,7 @@ RUN --mount=type=cache,id=pnpm-store,target=/pnpm-store \
 
 FROM ${NODE_IMAGE} AS api
 ENV NODE_ENV=production API_HOST=0.0.0.0 API_PORT=4000 \
-	UPLOADS_DIR=/var/lib/petri/uploads
+	UPLOADS_DIR=/var/lib/petri/uploads LOGS_DIR=/var/lib/petri/logs
 WORKDIR /app
 COPY --from=build /out/api ./
 # Uploaded archives (a volume shared with the worker). Created here so the

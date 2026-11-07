@@ -1,6 +1,6 @@
 import swagger from "@fastify/swagger";
 import swaggerUi from "@fastify/swagger-ui";
-import type { Database } from "@petri/database";
+import type { Database, EventListener } from "@petri/database";
 import type { JobQueue } from "@petri/jobs";
 import Fastify, { type FastifyServerOptions } from "fastify";
 import {
@@ -15,6 +15,7 @@ import type { Auth } from "./auth/auth.ts";
 import { registerErrorHandling } from "./errors.ts";
 import { apiKeyRoutes } from "./routes/api-keys.ts";
 import { authRoutes } from "./routes/auth.ts";
+import { deploymentLiveRoutes } from "./routes/deployment-live.ts";
 import { deploymentRoutes } from "./routes/deployments.ts";
 import { galleryRoutes } from "./routes/gallery.ts";
 import { healthRoutes } from "./routes/health.ts";
@@ -26,6 +27,10 @@ export interface AppOptions {
 	auth: Auth;
 	/** Background jobs; the API only sends them. */
 	jobs: JobQueue;
+	/** Live events from the worker (one listener per process). */
+	events: EventListener;
+	/** Where the worker writes build logs. */
+	logsDir: string;
 	/** ZIP upload storage and limits. */
 	uploads: Pick<UploadOptions, "uploadsDir" | "maxUploadBytes" | "zipLimits">;
 	/** Public URL of the admin panel, e.g. https://petri.example.com. */
@@ -40,6 +45,8 @@ export async function buildApp({
 	db,
 	auth,
 	jobs,
+	events,
+	logsDir,
 	uploads,
 	publicUrl,
 	trustProxy = [],
@@ -87,6 +94,7 @@ export async function buildApp({
 	await app.register(galleryRoutes, { prefix, db });
 	await app.register(projectRoutes, { prefix, db });
 	await app.register(deploymentRoutes, { prefix, db, jobs });
+	await app.register(deploymentLiveRoutes, { prefix, db, events, logsDir });
 	await app.register(uploadRoutes, { prefix, db, jobs, ...uploads });
 	await app.register(apiKeyRoutes, { prefix, db });
 
