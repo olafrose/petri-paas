@@ -346,10 +346,7 @@ async function checkHealth(
 		await runtime.connect(network, settings.workerContainer);
 	}
 	try {
-		const state = await runtime.inspect(deploymentId);
-		const address = state?.addresses[network];
-		if (!address)
-			throw new StepFailure("The app's container has no network address");
+		const address = await waitForAddress(runtime, deploymentId, network);
 		return await waitForHealthy({
 			url: `http://${address}:${port}/`,
 			signal,
@@ -370,6 +367,31 @@ async function checkHealth(
 				.catch(() => {});
 		}
 	}
+}
+
+/**
+ * The app's address on its network. A container that already stopped has
+ * none; report why it stopped instead.
+ */
+async function waitForAddress(
+	runtime: DockerRuntime,
+	deploymentId: string,
+	network: string,
+): Promise<string> {
+	for (let attempt = 0; attempt < 20; attempt++) {
+		const state = await runtime.inspect(deploymentId);
+		const address = state?.addresses[network];
+		if (state?.running && address) return address;
+		if (state && !state.running && state.status !== "created") {
+			throw new StepFailure(
+				state.oomKilled
+					? "The app was stopped for using more memory than allowed"
+					: `The app stopped with exit code ${state.exitCode}`,
+			);
+		}
+		await new Promise((resolve) => setTimeout(resolve, 250));
+	}
+	throw new StepFailure("The app's container did not get a network address");
 }
 
 async function removeCreated(
