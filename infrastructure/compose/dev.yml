@@ -54,6 +54,33 @@ services:
     ports:
       - "127.0.0.1:2375:2375"
 
+  # The edge proxy: routes preview hostnames to apps. Previews are at
+  # http://<subdomain>.app.localhost:8088. Its admin API is a Unix socket
+  # in .tools/edge, where the worker on the host reaches it; the container
+  # runs as your user (PETRI_UID/PETRI_GID if yours isn't 1000) so the
+  # socket belongs to you.
+  edge:
+    image: caddy:2.11.9-alpine
+    command: [caddy, run, --config, /etc/caddy/edge.json]
+    user: "${PETRI_UID:-1000}:${PETRI_GID:-1000}"
+    read_only: true
+    tmpfs: [/tmp]
+    environment:
+      XDG_DATA_HOME: /tmp/data
+      XDG_CONFIG_HOME: /tmp/config
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    ports:
+      - "127.0.0.1:8088:8080"
+    volumes:
+      - ../caddy/edge.json:/etc/caddy/edge.json:ro
+      - ../../.tools/edge:/run/petri-edge
+    healthcheck:
+      test: ["CMD", "test", "-S", "/run/petri-edge/admin.sock"]
+      interval: 2s
+      timeout: 3s
+      retries: 15
+
 volumes:
   postgres-data:
   buildkit-state:

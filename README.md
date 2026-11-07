@@ -22,7 +22,7 @@ Setup:
 ```bash
 pnpm install
 cp .env.example .env    # local configuration, see comments inside
-pnpm dev:infra          # start PostgreSQL and BuildKit in Docker
+pnpm dev:infra          # start PostgreSQL, BuildKit and the edge proxy in Docker
 scripts/install-buildctl.sh  # BuildKit client for builds and tests
 pnpm dev:check-db       # confirm the configured database is reachable
 ```
@@ -64,8 +64,9 @@ docker compose exec api node dist/cli/set-owner.js --email you@example.com
 
 This builds the `api`, `worker` and `web` images from
 `infrastructure/docker/Dockerfile` and starts them with PostgreSQL. Only
-the web app is published (`WEB_BIND:WEB_PORT`, default
-`127.0.0.1:3000`); the API and database stay on the internal network.
+the web app (`WEB_BIND:WEB_PORT`, default `127.0.0.1:3000`) and the edge
+proxy for previews (`EDGE_BIND:EDGE_PORT`, default `127.0.0.1:8080`) are
+published; the API and database stay on the internal network.
 Containers run as an unprivileged user with read-only file systems.
 
 ## Authentication

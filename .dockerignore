@@ -11,3 +11,5 @@
 inbox
 outbox
 coverage
+# Local tools and the dev edge proxy's admin socket.
+.tools
