@@ -8,6 +8,7 @@ uploads.
 
 - Architecture: [`docs/architecture.md`](docs/architecture.md)
 - Development plan: [`docs/plan.md`](docs/plan.md)
+- Operations: [`docs/operations.md`](docs/operations.md)
 
 ## Development
 
@@ -62,8 +63,12 @@ by itself.
 
 ## Running the full stack in containers
 
+For the production host, follow [`docs/operations.md`](docs/operations.md)
+(firewall, images from GHCR, NPM, DNS, certificate, upgrades). To try the
+stack locally, built from this checkout:
+
 ```bash
-cp .env.example .env    # set POSTGRES_PASSWORD, AUTH_SECRET, PUBLIC_URL
+cp .env.example .env    # set POSTGRES_PASSWORD, AUTH_SECRET, PUBLIC_URL, PREVIEW_BASE_URL
 docker compose up -d --build
 docker compose exec api node dist/cli/set-owner.js --email you@example.com
 ```

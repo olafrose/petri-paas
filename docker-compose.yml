@@ -1,4 +1,8 @@
-# The full petri. stack: docker compose up -d --build
+# The full petri. stack.
+#   Production (images from GHCR, see docs/operations.md):
+#     docker compose pull && docker compose up -d
+#   Built from this checkout instead:
+#     docker compose up -d --build
 #
 # Reads settings from the environment or a .env file next to this file
 # (see .env.example, "Docker Compose" section). For local development
@@ -41,14 +45,15 @@ services:
       context: .
       dockerfile: infrastructure/docker/Dockerfile
       target: api
-    image: petri-api
+    image: ${PETRI_IMAGES:-ghcr.io/olafrose}/petri-api:${PETRI_TAG:-main}
     environment:
       <<: *database-env
       PUBLIC_URL: ${PUBLIC_URL:?Set PUBLIC_URL}
       PREVIEW_BASE_URL: ${PREVIEW_BASE_URL:?Set PREVIEW_BASE_URL}
       AUTH_SECRET: ${AUTH_SECRET:?Set AUTH_SECRET}
-      # Requests arrive through the web container on the internal network.
-      TRUST_PROXY: ${PETRI_SUBNET:-172.31.250.0/24}
+      # Requests arrive from NPM through the web container on the internal
+      # network; both pass on the visitor's address.
+      TRUST_PROXY: ${PETRI_SUBNET:-172.31.250.0/24},${NPM_ADDRESS:-}
       OIDC_ISSUER: ${OIDC_ISSUER:-}
       OIDC_CLIENT_ID: ${OIDC_CLIENT_ID:-}
       OIDC_CLIENT_SECRET: ${OIDC_CLIENT_SECRET:-}
@@ -72,7 +77,7 @@ services:
       context: .
       dockerfile: infrastructure/docker/Dockerfile
       target: worker
-    image: petri-worker
+    image: ${PETRI_IMAGES:-ghcr.io/olafrose}/petri-worker:${PETRI_TAG:-main}
     # A fixed name: the worker joins each app's network by this name to
     # health-check it.
     container_name: petri-worker
@@ -82,7 +87,7 @@ services:
       PREVIEW_BASE_URL: ${PREVIEW_BASE_URL:?Set PREVIEW_BASE_URL}
       EDGE_ADMIN_SOCKET: /run/petri-edge/admin.sock
       EDGE_CONTAINER: petri-edge
-      EDGE_TRUSTED_PROXIES: ${EDGE_TRUSTED_PROXIES:-}
+      EDGE_TRUSTED_PROXIES: ${NPM_ADDRESS:-}
     networks: [internal, build, docker]
     volumes:
       - uploads:/var/lib/petri/uploads
@@ -171,7 +176,7 @@ services:
       context: .
       dockerfile: infrastructure/docker/Dockerfile
       target: web
-    image: petri-web
+    image: ${PETRI_IMAGES:-ghcr.io/olafrose}/petri-web:${PETRI_TAG:-main}
     tmpfs: [/tmp, /app/apps/web/.next/cache]
     environment:
       API_INTERNAL_URL: http://api:4000
