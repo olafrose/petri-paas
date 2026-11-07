@@ -13,6 +13,7 @@ export {
 	KEPT_CAPABILITIES,
 	LABELS,
 	LimitsNotEnforcedError,
+	networkName,
 	type ResourceLimits,
 } from "./docker-runtime.ts";
 export {

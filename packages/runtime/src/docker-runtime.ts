@@ -60,6 +60,8 @@ export interface ContainerState {
 	oomKilled: boolean;
 	error: string;
 	buildId: string | null;
+	/** "no" until the app passed its health check, then "unless-stopped". */
+	restartPolicy: string;
 	/** IP address per network name. */
 	addresses: Record<string, string>;
 }
@@ -84,11 +86,13 @@ interface InspectResponse {
 		OOMKilled: boolean;
 		Error: string;
 	};
+	HostConfig: { RestartPolicy: { Name: string } };
 	NetworkSettings: { Networks: Record<string, { IPAddress: string }> | null };
 }
 
 const containerName = (deploymentId: string) => `petri-${deploymentId}`;
-const networkName = (deploymentId: string) => `petri-${deploymentId}`;
+/** The deployment's own network (see `ensureNetwork`). */
+export const networkName = (deploymentId: string) => `petri-${deploymentId}`;
 
 /**
  * Runs deployments as Docker containers. Every operation is safe to
@@ -268,10 +272,22 @@ export class DockerRuntime {
 	 * passed its health check.
 	 */
 	async enableRestarts(deploymentId: string): Promise<void> {
+		await this.#setRestartPolicy(deploymentId, "unless-stopped");
+	}
+
+	/**
+	 * Back to no restarts, before starting a stopped app again: until it
+	 * passes its health check, a crash must show as a crash.
+	 */
+	async disableRestarts(deploymentId: string): Promise<void> {
+		await this.#setRestartPolicy(deploymentId, "no");
+	}
+
+	async #setRestartPolicy(deploymentId: string, name: "no" | "unless-stopped") {
 		await this.#docker.call(
 			"POST",
 			`/containers/${containerName(deploymentId)}/update`,
-			{ json: { RestartPolicy: { Name: "unless-stopped" } } },
+			{ json: { RestartPolicy: { Name: name } } },
 		);
 	}
 
@@ -307,6 +323,7 @@ export class DockerRuntime {
 			oomKilled: body.State.OOMKilled,
 			error: body.State.Error,
 			buildId: body.Config.Labels?.[LABELS.build] ?? null,
+			restartPolicy: body.HostConfig.RestartPolicy.Name,
 			addresses: Object.fromEntries(
 				Object.entries(body.NetworkSettings.Networks ?? {}).map(
 					([name, info]) => [name, info.IPAddress],

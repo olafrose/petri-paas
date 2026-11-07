@@ -3,6 +3,11 @@ import type { JobQueue } from "@petri/jobs";
 import type { DockerRuntime } from "@petri/runtime";
 import type { Logger } from "pino";
 import {
+	deploymentDeleteHandler,
+	deploymentStartHandler,
+	deploymentStopHandler,
+} from "./deployment-actions.ts";
+import {
 	type DeploymentRunSettings,
 	deploymentRunHandler,
 } from "./deployment-run.ts";
@@ -26,6 +31,23 @@ export async function registerHandlers(
 	await queue.work(
 		"deployment.run",
 		withLogging(deps.log, "deployment.run", deploymentRunHandler(deps)),
+		{ concurrency: 2 },
+	);
+	// The owner's actions. Each holds a database connection while it has
+	// the deployment's lock.
+	await queue.work(
+		"deployment.stop",
+		withLogging(deps.log, "deployment.stop", deploymentStopHandler(deps)),
+		{ concurrency: 2 },
+	);
+	await queue.work(
+		"deployment.start",
+		withLogging(deps.log, "deployment.start", deploymentStartHandler(deps)),
+		{ concurrency: 2 },
+	);
+	await queue.work(
+		"deployment.delete",
+		withLogging(deps.log, "deployment.delete", deploymentDeleteHandler(deps)),
 		{ concurrency: 2 },
 	);
 }

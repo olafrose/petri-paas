@@ -2,12 +2,10 @@ import { createWriteStream } from "node:fs";
 import { mkdir, rm } from "node:fs/promises";
 import { join } from "node:path";
 import {
-	BuildError,
 	buildImage,
 	extractZip,
 	fetchGitSource,
 	type GitFetchOptions,
-	SourceError,
 } from "@petri/build-engine";
 import {
 	builds,
@@ -21,48 +19,27 @@ import {
 	updateStatus,
 } from "@petri/deployment-core";
 import type { JobHandler } from "@petri/jobs";
-import {
-	DockerApiError,
-	type DockerRuntime,
-	LimitsNotEnforcedError,
-	waitForHealthy,
-} from "@petri/runtime";
+import { DockerApiError, type DockerRuntime } from "@petri/runtime";
 import { eq } from "drizzle-orm";
 import type { Logger } from "pino";
+import {
+	imageName as buildImageName,
+	checkHealth,
+	choosePort,
+	type HealthSettings,
+	ownerMessage,
+	StepFailure,
+} from "./app-runtime.ts";
 
-export interface DeploymentRunSettings {
+export interface DeploymentRunSettings extends HealthSettings {
 	workspaceDir: string;
 	logsDir: string;
 	uploadsDir: string;
 	buildkitHost: string;
 	buildctlPath: string;
-	/** Set when the worker runs in a container (see WORKER_CONTAINER). */
-	workerContainer?: string | undefined;
 	buildTimeoutMs?: number;
-	health?: { timeoutMs?: number; intervalMs?: number };
 	/** For tests: options passed through to the Git fetch. */
 	git?: Partial<GitFetchOptions>;
-}
-
-/** A step failed for a reason worth showing the owner. */
-class StepFailure extends Error {
-	constructor(message: string) {
-		super(message);
-		this.name = "StepFailure";
-	}
-}
-
-/** Errors whose message is written for the owner. */
-function ownerMessage(error: unknown): string | null {
-	if (
-		error instanceof StepFailure ||
-		error instanceof SourceError ||
-		error instanceof BuildError ||
-		error instanceof LimitsNotEnforcedError
-	) {
-		return error.message;
-	}
-	return null;
 }
 
 /**
@@ -115,7 +92,7 @@ export function deploymentRunHandler(deps: {
 		const workspace = join(settings.workspaceDir, buildId);
 		const source = join(workspace, "source");
 		const imageArchive = join(workspace, "image.tar");
-		const imageName = `petri/${deploymentId}:${buildId}`;
+		const imageName = buildImageName(deploymentId, buildId);
 		const logPath = join(settings.logsDir, `${buildId}.log`);
 		let current: DeploymentStatus = "queued";
 		const created = { container: false, network: false, image: false };
@@ -309,90 +286,6 @@ function watchStatus(
 		signal: AbortSignal.any([parent, controller.signal]),
 		stop: () => clearInterval(timer),
 	};
-}
-
-/** The configured port, or the one the image declares with EXPOSE. */
-async function choosePort(
-	runtime: DockerRuntime,
-	imageName: string,
-	configured: number | null,
-	note: (line: string) => void,
-): Promise<number> {
-	if (configured) return configured;
-	const exposed = await runtime.exposedPorts(imageName);
-	const [first] = exposed;
-	if (first === undefined) {
-		throw new StepFailure(
-			"No port known: set build.port, or add EXPOSE <port> to the Dockerfile",
-		);
-	}
-	if (exposed.length > 1) {
-		note(
-			`The image exposes ${exposed.join(", ")}; using ${first} (set build.port to choose)`,
-		);
-	}
-	return first;
-}
-
-async function checkHealth(
-	runtime: DockerRuntime,
-	settings: DeploymentRunSettings,
-	deploymentId: string,
-	network: string,
-	port: number,
-	signal: AbortSignal,
-) {
-	// In a container, the worker must join the app's network to reach it.
-	if (settings.workerContainer) {
-		await runtime.connect(network, settings.workerContainer);
-	}
-	try {
-		const address = await waitForAddress(runtime, deploymentId, network);
-		return await waitForHealthy({
-			url: `http://${address}:${port}/`,
-			signal,
-			...settings.health,
-			isRunning: async () => {
-				const current = await runtime.inspect(deploymentId);
-				return {
-					running: current?.running ?? false,
-					exitCode: current?.exitCode ?? -1,
-					oomKilled: current?.oomKilled ?? false,
-				};
-			},
-		});
-	} finally {
-		if (settings.workerContainer) {
-			await runtime
-				.disconnect(network, settings.workerContainer)
-				.catch(() => {});
-		}
-	}
-}
-
-/**
- * The app's address on its network. A container that already stopped has
- * none; report why it stopped instead.
- */
-async function waitForAddress(
-	runtime: DockerRuntime,
-	deploymentId: string,
-	network: string,
-): Promise<string> {
-	for (let attempt = 0; attempt < 20; attempt++) {
-		const state = await runtime.inspect(deploymentId);
-		const address = state?.addresses[network];
-		if (state?.running && address) return address;
-		if (state && !state.running && state.status !== "created") {
-			throw new StepFailure(
-				state.oomKilled
-					? "The app was stopped for using more memory than allowed"
-					: `The app stopped with exit code ${state.exitCode}`,
-			);
-		}
-		await new Promise((resolve) => setTimeout(resolve, 250));
-	}
-	throw new StepFailure("The app's container did not get a network address");
 }
 
 async function removeCreated(

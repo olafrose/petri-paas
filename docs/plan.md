@@ -305,6 +305,13 @@ build log (task 2.7).
 **Done when:** each action works from the matching states and is
 refused from the others.
 
+**Changed:** deleting a project is refused (409) until all its
+deployments are `deleted`. Removing the project's rows would otherwise
+drop petri.'s only reference to containers that are still running. A
+deployment's history therefore goes with its project, as planned, but
+only after its resources are gone. Deletion also removes the uploaded
+ZIP archive, which only served rebuilds.
+
 **Result:** a project builds and runs locally (no public URL yet).
 
 ## Phase 3 --- Public previews (outline)
