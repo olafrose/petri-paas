@@ -72,7 +72,7 @@ services:
     image: petri-worker
     environment:
       <<: *database-env
-    networks: [internal, build]
+    networks: [internal, build, docker]
     volumes:
       - uploads:/var/lib/petri/uploads
     depends_on:
@@ -80,6 +80,24 @@ services:
       api:
         condition: service_healthy
     stop_grace_period: 40s
+
+  # The worker's only access to Docker. Allows the containers, images and
+  # networks APIs; exec, volumes, build, system and everything else are
+  # blocked. It filters by API section, not by request content: the worker
+  # itself fixes every container's security settings.
+  docker-proxy:
+    image: tecnativa/docker-socket-proxy:v0.5.0
+    restart: unless-stopped
+    networks: [docker]
+    environment:
+      CONTAINERS: 1
+      IMAGES: 1
+      NETWORKS: 1
+      POST: 1
+      ALLOW_START: 1
+      ALLOW_STOP: 1
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
 
   # Rootless BuildKit. Only the worker can reach it (the "build" network).
   # The relaxed confinement is what rootless mode needs to create its own
@@ -130,6 +148,9 @@ networks:
   # Worker ↔ BuildKit only. Builds reach the internet (base images,
   # packages) through it.
   build:
+  # Worker ↔ Docker socket proxy only; no internet access needed.
+  docker:
+    internal: true
 
 volumes:
   postgres-data:

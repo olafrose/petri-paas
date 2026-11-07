@@ -56,7 +56,7 @@ FROM moby/buildkit:v0.34.2-rootless AS buildkit
 
 FROM ${NODE_IMAGE} AS worker
 ENV NODE_ENV=production UPLOADS_DIR=/var/lib/petri/uploads \
-	BUILDKIT_HOST=tcp://buildkitd:1234
+	BUILDKIT_HOST=tcp://buildkitd:1234 DOCKER_HOST=tcp://docker-proxy:2375
 RUN apk add --no-cache git
 COPY --from=buildkit /usr/bin/buildctl /usr/local/bin/buildctl
 WORKDIR /app
