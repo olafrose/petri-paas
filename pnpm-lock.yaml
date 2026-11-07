@@ -385,6 +385,15 @@ importers:
         specifier: 0.45.4
         version: 0.45.4(@opentelemetry/api@1.10.0)(@types/pg@8.23.1)(kysely@0.29.8)(pg@8.23.1)
 
+  packages/runtime:
+    devDependencies:
+      '@petri/build-engine':
+        specifier: workspace:*
+        version: link:../build-engine
+      '@types/node':
+        specifier: ^24.19.2
+        version: 24.19.2
+
 packages:
 
   '@better-auth/core@1.7.18':

@@ -54,6 +54,7 @@ jobs:
     env:
       TEST_DATABASE_URL: postgres://petri:petri@localhost:5432/petri
       BUILDKIT_HOST: tcp://127.0.0.1:1234
+      DOCKER_PROXY_HOST: tcp://127.0.0.1:2375
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
@@ -75,6 +76,21 @@ jobs:
             sleep 1
           done
           docker logs buildkitd
+          exit 1
+
+      - name: Start Docker socket proxy
+        run: |
+          docker run -d --name docker-proxy \
+            -v /var/run/docker.sock:/var/run/docker.sock:ro \
+            -e CONTAINERS=1 -e IMAGES=1 -e NETWORKS=1 -e POST=1 \
+            -e ALLOW_START=1 -e ALLOW_STOP=1 \
+            -p 127.0.0.1:2375:2375 \
+            tecnativa/docker-socket-proxy:v0.5.0
+          for _ in $(seq 1 30); do
+            curl -sf http://127.0.0.1:2375/v1.47/_ping && exit 0
+            sleep 1
+          done
+          docker logs docker-proxy
           exit 1
 
       - uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6.1.1
