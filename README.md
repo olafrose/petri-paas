@@ -75,6 +75,26 @@ proxy for previews (`EDGE_BIND:EDGE_PORT`, default `127.0.0.1:8080`) are
 published; the API and database stay on the internal network.
 Containers run as an unprivileged user with read-only file systems.
 
+## Egress filtering
+
+Apps and builds may reach the public internet, but nothing private: not
+the LAN, not the host, not cloud metadata, not other deployments. The
+rules are in `infrastructure/firewall/petri.nft`; install them on every
+petri. host before anything is public:
+
+```bash
+sudo apt install nftables
+sudo scripts/install-firewall.sh   # loaded before Docker on every boot
+scripts/probe-egress.sh            # checks what apps and builds can reach
+```
+
+The probe exits non-zero if something private is reachable. Add
+listening machines from your LAN that must stay unreachable, e.g. the
+router and NPM's admin UI: `PROBE_LAN_TARGETS="192.168.0.1 80,192.168.0.5 81"`.
+On the production stack, point it at its build network:
+`PROBE_BUILD_NETWORK=petri_build`. Docker requires the firewall once it
+is installed: if the rules can't be loaded, Docker doesn't start.
+
 ## Authentication
 
 The admin panel has a single owner and no sign-up. Create the owner, or

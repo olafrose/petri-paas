@@ -5,6 +5,8 @@ export {
 	parseDockerHost,
 } from "./docker-client.ts";
 export {
+	APP_BRIDGE_PREFIX,
+	bridgeName,
 	type ContainerSpec,
 	type ContainerState,
 	containerName,

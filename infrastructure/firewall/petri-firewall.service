@@ -1,0 +1,22 @@
+# Loads petri.'s egress filtering (petri.nft) before Docker starts, so no
+# app or build runs unfiltered, also right after a reboot. Docker requires
+# it: if the rules can't be loaded, Docker doesn't start, and stopping
+# this unit stops Docker first (fail closed). `systemctl reload` applies a
+# changed petri.nft atomically, without touching Docker.
+# Installed by scripts/install-firewall.sh.
+[Unit]
+Description=petri. egress filtering (nftables)
+Before=docker.service
+After=network-pre.target
+Wants=network-pre.target
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/sbin/nft -f /etc/petri/petri.nft
+ExecReload=/usr/sbin/nft -f /etc/petri/petri.nft
+ExecStop=/usr/sbin/nft delete table inet petri
+
+[Install]
+WantedBy=multi-user.target
+RequiredBy=docker.service

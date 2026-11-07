@@ -96,6 +96,21 @@ export const containerName = (deploymentId: string) => `petri-${deploymentId}`;
 export const networkName = (deploymentId: string) => `petri-${deploymentId}`;
 
 /**
+ * Prefix of the host interface of every app network. The host firewall
+ * (infrastructure/firewall/petri.nft) filters traffic from interfaces
+ * named like this: keep the two in sync.
+ */
+export const APP_BRIDGE_PREFIX = "pa-";
+
+/**
+ * The host interface of the deployment's network: the prefix and the
+ * last 12 hex digits of its id (the random part of a UUIDv7), within
+ * Linux's 15-character limit.
+ */
+export const bridgeName = (deploymentId: string) =>
+	`${APP_BRIDGE_PREFIX}${deploymentId.replaceAll("-", "").slice(-12)}`;
+
+/**
  * Runs deployments as Docker containers. Every operation is safe to
  * repeat: a retried job finds what an earlier attempt created instead of
  * creating duplicates.
@@ -173,6 +188,7 @@ export class DockerRuntime {
 			json: {
 				Name: name,
 				Driver: "bridge",
+				Options: { "com.docker.network.bridge.name": bridgeName(deploymentId) },
 				Labels: {
 					[LABELS.managed]: "true",
 					[LABELS.deployment]: deploymentId,
