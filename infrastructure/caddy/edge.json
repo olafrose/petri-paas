@@ -1,0 +1,40 @@
+{
+	"admin": {
+		"listen": "unix//run/petri-edge/admin.sock",
+		"config": {
+			"persist": false
+		}
+	},
+	"apps": {
+		"http": {
+			"servers": {
+				"previews": {
+					"listen": [":8080"],
+					"automatic_https": {
+						"disable": true
+					},
+					"routes": [
+						{
+							"handle": [
+								{
+									"handler": "subroute",
+									"@id": "petri-previews",
+									"routes": []
+								}
+							]
+						},
+						{
+							"handle": [
+								{
+									"handler": "static_response",
+									"status_code": 404,
+									"body": "No preview at this address.\n"
+								}
+							]
+						}
+					]
+				}
+			}
+		}
+	}
+}

@@ -375,6 +375,15 @@ importers:
         specifier: ^24.19.2
         version: 24.19.2
 
+  packages/edge-proxy:
+    devDependencies:
+      '@petri/runtime':
+        specifier: workspace:*
+        version: link:../runtime
+      '@types/node':
+        specifier: ^24.19.2
+        version: 24.19.2
+
   packages/jobs:
     dependencies:
       '@petri/database':

@@ -55,6 +55,7 @@ jobs:
       TEST_DATABASE_URL: postgres://petri:petri@localhost:5432/petri
       BUILDKIT_HOST: tcp://127.0.0.1:1234
       DOCKER_PROXY_HOST: tcp://127.0.0.1:2375
+      EDGE_CONTAINER: edge
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
@@ -91,6 +92,27 @@ jobs:
             sleep 1
           done
           docker logs docker-proxy
+          exit 1
+
+      # As in infrastructure/compose/dev.yml: admin API on a socket in
+      # .tools/edge, owned by the runner's user.
+      - name: Start edge proxy
+        run: |
+          mkdir -p .tools/edge
+          docker run -d --name edge \
+            --user "$(id -u):$(id -g)" \
+            --read-only --tmpfs /tmp \
+            -e XDG_DATA_HOME=/tmp/data -e XDG_CONFIG_HOME=/tmp/config \
+            --cap-drop ALL --security-opt no-new-privileges:true \
+            -v "$PWD/infrastructure/caddy/edge.json:/etc/caddy/edge.json:ro" \
+            -v "$PWD/.tools/edge:/run/petri-edge" \
+            -p 127.0.0.1:8088:8080 \
+            caddy:2.11.9-alpine caddy run --config /etc/caddy/edge.json
+          for _ in $(seq 1 30); do
+            test -S .tools/edge/admin.sock && exit 0
+            sleep 1
+          done
+          docker logs edge
           exit 1
 
       - uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6.1.1

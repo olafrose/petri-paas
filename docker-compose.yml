@@ -83,6 +83,7 @@ services:
       - uploads:/var/lib/petri/uploads
       - workspaces:/var/lib/petri/workspaces
       - build-logs:/var/lib/petri/logs
+      - edge-admin:/run/petri-edge
     depends_on:
       # The API applies database migrations on startup.
       api:
@@ -125,6 +126,36 @@ services:
       - ./infrastructure/buildkit/buildkitd.toml:/etc/buildkit/buildkitd.toml:ro
       - buildkit-state:/home/user/.local/share/buildkit
 
+  # The edge proxy: routes preview hostnames to the apps, for NPM's
+  # *.app proxy host. It joins every app's network, and Caddy's admin API
+  # has no authentication, so the API is a Unix socket in a volume that
+  # only the worker shares, never a network port.
+  edge:
+    image: caddy:2.11.9-alpine
+    restart: unless-stopped
+    command: [caddy, run, --config, /etc/caddy/edge.json]
+    # The worker's user (node), so it can use the admin socket.
+    user: "1000:1000"
+    networks: [edge]
+    read_only: true
+    tmpfs: [/tmp]
+    environment:
+      XDG_DATA_HOME: /tmp/data
+      XDG_CONFIG_HOME: /tmp/config
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    ports:
+      # Bind to the address NPM reaches.
+      - "${EDGE_BIND:-127.0.0.1}:${EDGE_PORT:-8080}:8080"
+    volumes:
+      - ./infrastructure/caddy/edge.json:/etc/caddy/edge.json:ro
+      - edge-admin:/run/petri-edge
+    healthcheck:
+      test: ["CMD", "test", "-S", "/run/petri-edge/admin.sock"]
+      interval: 10s
+      timeout: 3s
+      retries: 10
+
   web:
     <<: *service-defaults
     build:
@@ -159,6 +190,9 @@ networks:
   # Worker ↔ Docker socket proxy only; no internet access needed.
   docker:
     internal: true
+  # The edge proxy's published port. It reaches apps by joining their own
+  # networks, not through this one.
+  edge:
 
 volumes:
   postgres-data:
@@ -170,3 +204,9 @@ volumes:
   workspaces:
   # Build logs, kept with the deployment history.
   build-logs:
+  # The edge proxy's admin socket. In memory, readable only by uid 1000.
+  edge-admin:
+    driver_opts:
+      type: tmpfs
+      device: tmpfs
+      o: uid=1000,gid=1000,mode=0700
