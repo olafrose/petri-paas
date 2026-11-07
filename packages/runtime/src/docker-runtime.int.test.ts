@@ -226,6 +226,23 @@ describe("containers", { timeout: 60_000 }, () => {
 		await runtime.removeContainer(id); // already gone: fine
 	});
 
+	test("joining and leaving another network, each twice", async () => {
+		const id = deployment();
+		await runWeb(id);
+		const other = deployment();
+		const network = await runtime.ensureNetwork(other);
+		const container = `petri-${id}`;
+
+		await runtime.connect(network, container);
+		await runtime.connect(network, container); // already connected: fine
+		expect(await runtime.networksOf(container)).toEqual(
+			expect.arrayContaining([`petri-${id}`, network]),
+		);
+		await runtime.disconnect(network, container);
+		await runtime.disconnect(network, container); // not connected: fine
+		expect(await runtime.networksOf(container)).toEqual([`petri-${id}`]);
+	});
+
 	test("a crashing app is reported with its exit code", async () => {
 		const id = deployment();
 		await runtime.loadImage(images.crash.archive, images.crash.name);

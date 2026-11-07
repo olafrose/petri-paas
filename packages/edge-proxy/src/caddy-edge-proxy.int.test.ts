@@ -190,6 +190,9 @@ describe("forwarded headers", () => {
 		});
 		const { body } = await get("demo.app.localhost", "/cgi-bin/echo", forged);
 		expect(body).toMatch(/^xff=203\.0\.113\.9, /);
+		expect(await edge.trustedProxies()).toEqual(["0.0.0.0/0", "::/0"]);
+		await edge.configure({});
+		expect(await edge.trustedProxies()).toEqual([]);
 	});
 });
 

@@ -88,7 +88,9 @@ export function edgeConfig(settings: EdgeSettings = {}) {
 	};
 }
 
-const routeId = (deploymentId: string) => `${ROUTE_PREFIX}${deploymentId}`;
+/** The id of a deployment's route in Caddy's configuration. */
+export const routeId = (deploymentId: string) =>
+	`${ROUTE_PREFIX}${deploymentId}`;
 
 interface CaddyRoute {
 	"@id": string;
@@ -198,6 +200,18 @@ export class CaddyEdgeProxy {
 		await this.#admin.call("DELETE", `/id/${routeId(deploymentId)}`, {
 			accept: [404],
 		});
+	}
+
+	/**
+	 * The proxies currently trusted. Empty after Caddy restarted with its
+	 * initial configuration.
+	 */
+	async trustedProxies(): Promise<string[]> {
+		const { body } = await this.#admin.call<{ ranges?: string[] } | null>(
+			"GET",
+			`/config/apps/http/servers/${SERVER}/trusted_proxies`,
+		);
+		return body?.ranges ?? [];
 	}
 
 	async listRoutes(): Promise<PreviewRoute[]> {

@@ -90,7 +90,8 @@ interface InspectResponse {
 	NetworkSettings: { Networks: Record<string, { IPAddress: string }> | null };
 }
 
-const containerName = (deploymentId: string) => `petri-${deploymentId}`;
+/** The deployment's container; other containers on its network reach it by this name. */
+export const containerName = (deploymentId: string) => `petri-${deploymentId}`;
 /** The deployment's own network (see `ensureNetwork`). */
 export const networkName = (deploymentId: string) => `petri-${deploymentId}`;
 
@@ -202,12 +203,32 @@ export class DockerRuntime {
 		);
 	}
 
+	/** Detaches a container from a network; fine if it isn't attached. */
 	async disconnect(network: string, containerId: string): Promise<void> {
-		await this.#docker.call(
-			"POST",
-			`/networks/${encodeURIComponent(network)}/disconnect`,
-			{ json: { Container: containerId, Force: true }, accept: [404] },
-		);
+		try {
+			await this.#docker.call(
+				"POST",
+				`/networks/${encodeURIComponent(network)}/disconnect`,
+				{ json: { Container: containerId, Force: true }, accept: [404] },
+			);
+		} catch (error) {
+			// Docker reports "is not connected" as a 500.
+			if (
+				error instanceof DockerApiError &&
+				/is not connected to/.test(error.message)
+			) {
+				return;
+			}
+			throw error;
+		}
+	}
+
+	/** Names of the networks a container (e.g. the edge proxy) is on. */
+	async networksOf(containerId: string): Promise<string[]> {
+		const { body } = await this.#docker.call<{
+			NetworkSettings: { Networks: Record<string, unknown> | null };
+		}>("GET", `/containers/${encodeURIComponent(containerId)}/json`);
+		return Object.keys(body.NetworkSettings.Networks ?? {});
 	}
 
 	/**

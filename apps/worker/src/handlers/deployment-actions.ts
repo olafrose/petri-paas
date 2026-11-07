@@ -7,17 +7,18 @@ import {
 	type DeploymentStatus,
 	deployments,
 	type Transaction,
-	withTransaction,
 } from "@petri/database";
 import {
 	changeStatus,
 	InvalidTransitionError,
+	previewUrl,
 	updateStatus,
 } from "@petri/deployment-core";
 import type { JobHandler } from "@petri/jobs";
 import { type DockerRuntime, networkName } from "@petri/runtime";
-import { eq, sql } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 import type { Logger } from "pino";
+import type { EdgeRouting } from "../edge-routing.ts";
 import {
 	checkHealth,
 	choosePort,
@@ -25,6 +26,7 @@ import {
 	ownerMessage,
 	StepFailure,
 } from "./app-runtime.ts";
+import { withDeploymentLock } from "./deployment-lock.ts";
 import type { DeploymentRunSettings } from "./deployment-run.ts";
 
 /*
@@ -43,27 +45,9 @@ export type DeploymentActionSettings = Pick<
 interface Deps {
 	db: Database;
 	runtime: DockerRuntime;
+	edge: EdgeRouting;
 	log: Logger;
 	settings: DeploymentActionSettings;
-}
-
-/**
- * Runs `work` in a transaction holding the deployment's lock, so actions
- * on one deployment never overlap: e.g. after a quick stop and start, the
- * stop can't reach Docker after the start. Unlike the row lock, it doesn't
- * hold up the API. `work` uses only `tx`: one connection per lock.
- */
-export function withDeploymentLock<T>(
-	db: Database,
-	deploymentId: string,
-	work: (tx: Transaction) => Promise<T>,
-): Promise<T> {
-	return withTransaction(db, async (tx) => {
-		await tx.execute(
-			sql`select pg_advisory_xact_lock(hashtextextended(${`deployment:${deploymentId}`}, 0))`,
-		);
-		return work(tx);
-	});
 }
 
 async function findDeployment(
@@ -77,11 +61,14 @@ async function findDeployment(
 	return row;
 }
 
-/** Stops the app. Its container and image are kept for starting it again. */
+/**
+ * Takes the app off its preview hostname and stops it. Its container and
+ * image are kept for starting it again.
+ */
 export function deploymentStopHandler(
 	deps: Deps,
 ): JobHandler<"deployment.stop"> {
-	const { db, runtime } = deps;
+	const { db, runtime, edge } = deps;
 
 	return async (job) => {
 		const { deploymentId } = job.data;
@@ -95,6 +82,11 @@ export function deploymentStopHandler(
 				);
 				return;
 			}
+			await edge.unpublish(deploymentId);
+			await tx
+				.update(deployments)
+				.set({ routeId: null })
+				.where(eq(deployments.id, deploymentId));
 			// With restarts enabled ("unless-stopped"), it also stays stopped
 			// when Docker or the host restarts.
 			await runtime.stop(deploymentId);
@@ -112,12 +104,13 @@ export function deploymentStopHandler(
 export function deploymentStartHandler(
 	deps: Deps,
 ): JobHandler<"deployment.start"> {
-	const { db, runtime, settings } = deps;
+	const { db, runtime, edge, settings } = deps;
 
 	return async (job) => {
 		const { deploymentId } = job.data;
 		const log = deps.log.child({ deploymentId });
 		let current: DeploymentStatus | undefined;
+		let published = false;
 		let buildLog: WriteStream | undefined;
 		const note = (line: string) => buildLog?.write(`[petri] ${line}\n`);
 
@@ -148,12 +141,18 @@ export function deploymentStartHandler(
 					{ flags: "a", mode: 0o640 },
 				);
 				note("Starting the app again");
-				const port = await choosePort(
-					runtime,
-					imageName(deploymentId, container.buildId),
-					deployment.internalPort,
-					note,
-				);
+				const [build] = await tx
+					.select({ port: builds.port })
+					.from(builds)
+					.where(eq(builds.id, container.buildId));
+				const port =
+					build?.port ??
+					(await choosePort(
+						runtime,
+						imageName(deploymentId, container.buildId),
+						deployment.internalPort,
+						note,
+					));
 				await runtime.disableRestarts(deploymentId);
 				await runtime.start(deploymentId);
 				if (current === "deploying") {
@@ -165,7 +164,7 @@ export function deploymentStartHandler(
 					current = "health_check";
 					note(message);
 				}
-				return { port };
+				return { port, deployment };
 			});
 			if (!started) return;
 
@@ -185,13 +184,27 @@ export function deploymentStartHandler(
 			}
 
 			await runtime.enableRestarts(deploymentId);
+			published = true;
+			const routeId = await edge.publish(started.deployment, started.port);
+			const url = previewUrl(
+				edge.settings.previewBaseUrl,
+				started.deployment.subdomain,
+			);
 			await updateStatus(db, deploymentId, "ready", {
-				message: "Ready",
+				message: `Ready at ${url}`,
+				data: { url },
 				expectedFrom: ["health_check"],
+				updates: { routeId },
 			});
 			note("Ready");
 			log.info("deployment ready");
 		} catch (error) {
+			if (published) {
+				// Otherwise the next route sync removes it.
+				await edge
+					.unpublish(deploymentId)
+					.catch((err) => log.warn({ err }, "removing the route failed"));
+			}
 			// Failed before knowing the status: let the job retry.
 			if (current === undefined) throw error;
 			const now = await findDeployment(db, deploymentId);
@@ -226,8 +239,8 @@ export function deploymentStartHandler(
 }
 
 /**
- * Removes everything the deployment ran on: its container, network, the
- * images of all its builds and its uploaded archive. The deployment, its
+ * Removes everything the deployment ran on: its route, container,
+ * network, the images of all its builds and its uploaded archive. The deployment, its
  * builds, history and build logs remain; it ends as `deleted`.
  *
  * Errors are thrown so the job is retried. A deployment job still running
@@ -236,7 +249,7 @@ export function deploymentStartHandler(
 export function deploymentDeleteHandler(
 	deps: Deps,
 ): JobHandler<"deployment.delete"> {
-	const { db, runtime, settings } = deps;
+	const { db, runtime, edge, settings } = deps;
 
 	return async (job) => {
 		const { deploymentId } = job.data;
@@ -258,6 +271,9 @@ export function deploymentDeleteHandler(
 					.disconnect(networkName(deploymentId), settings.workerContainer)
 					.catch(() => {});
 			}
+			// Also takes the edge proxy off the network, which is needed to
+			// remove it.
+			await edge.unpublish(deploymentId);
 			await runtime.removeContainer(deploymentId);
 			await runtime.removeNetwork(deploymentId);
 			const buildRows = await tx
@@ -277,7 +293,7 @@ export function deploymentDeleteHandler(
 			await changeStatus(tx, deploymentId, "deleted", {
 				message: "Deleted",
 				expectedFrom: ["deleting"],
-				updates: { imageId: null, containerId: null },
+				updates: { imageId: null, containerId: null, routeId: null },
 			});
 			log.info("deployment deleted");
 		});

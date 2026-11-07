@@ -15,6 +15,7 @@
 		"@petri/config": "workspace:*",
 		"@petri/database": "workspace:*",
 		"@petri/deployment-core": "workspace:*",
+		"@petri/edge-proxy": "workspace:*",
 		"@petri/jobs": "workspace:*",
 		"@petri/runtime": "workspace:*",
 		"drizzle-orm": "0.45.4",

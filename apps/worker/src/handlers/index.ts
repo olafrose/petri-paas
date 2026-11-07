@@ -2,6 +2,7 @@ import type { Database } from "@petri/database";
 import type { JobQueue } from "@petri/jobs";
 import type { DockerRuntime } from "@petri/runtime";
 import type { Logger } from "pino";
+import type { EdgeRouting } from "../edge-routing.ts";
 import {
 	deploymentDeleteHandler,
 	deploymentStartHandler,
@@ -20,6 +21,7 @@ export async function registerHandlers(
 		db: Database;
 		log: Logger;
 		runtime: DockerRuntime;
+		edge: EdgeRouting;
 		settings: DeploymentRunSettings;
 	},
 ) {

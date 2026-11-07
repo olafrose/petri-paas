@@ -34,6 +34,7 @@ import {
 	test,
 	vi,
 } from "vitest";
+import { testEdge, viaEdge } from "../../test/edge.ts";
 import {
 	type DeploymentRunSettings,
 	deploymentRunHandler,
@@ -98,6 +99,7 @@ beforeAll(async () => {
 
 afterEach(async () => {
 	for (const id of deploymentIds.splice(0)) {
+		await edge.unpublish(id);
 		await runtime.removeContainer(id);
 		await runtime.removeNetwork(id);
 	}
@@ -108,10 +110,12 @@ afterAll(async () => {
 	rmSync(base, { recursive: true, force: true });
 });
 
+const edge = testEdge(runtime);
 const handler = () =>
 	deploymentRunHandler({
 		db,
 		runtime,
+		edge,
 		log: pino({ level: "silent" }),
 		settings,
 	});
@@ -206,6 +210,16 @@ describe("successful deployments", { timeout: 120_000 }, () => {
 		]);
 		expect(state.deployment?.status).toBe("ready");
 		expect(state.deployment?.containerId).toBeTruthy();
+		const subdomain = state.deployment?.subdomain as string;
+		expect(state.lastMessage).toBe(
+			`Ready at http://${subdomain}.app.localhost:8088/`,
+		);
+		expect(state.deployment?.routeId).toBe(`petri-route-${deploymentId}`);
+		expect(state.build?.port).toBe(8080);
+		expect(await viaEdge(subdomain)).toEqual({
+			status: 200,
+			body: "hello-from-petri\n",
+		});
 		expect(state.build).toMatchObject({
 			status: "succeeded",
 			provider: "dockerfile",
@@ -283,6 +297,9 @@ describe("failures end as failed with a clear reason", {
 		expect(state.lastMessage).toBe("The app stopped with exit code 7");
 		expect(state.log).toContain("boom");
 		expect(await runtime.inspect(deploymentId)).toBeNull();
+		expect((await viaEdge(state.deployment?.subdomain as string)).status).toBe(
+			404,
+		);
 	});
 
 	test("an app listening on another port", async () => {

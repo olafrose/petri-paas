@@ -158,6 +158,10 @@ export const deployment = z
 		projectId: z.uuid(),
 		name: z.string(),
 		subdomain: z.string(),
+		url: z.url().meta({
+			description:
+				"The preview's address; it answers while the deployment is ready",
+		}),
 		status: deploymentStatus,
 		source: deploymentSource,
 		build: z.object({

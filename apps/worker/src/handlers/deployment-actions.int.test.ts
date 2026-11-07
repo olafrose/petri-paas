@@ -31,13 +31,14 @@ import {
 	test,
 	vi,
 } from "vitest";
+import { testEdge, viaEdge } from "../../test/edge.ts";
 import { imageName } from "./app-runtime.ts";
 import {
 	deploymentDeleteHandler,
 	deploymentStartHandler,
 	deploymentStopHandler,
-	withDeploymentLock,
 } from "./deployment-actions.ts";
+import { withDeploymentLock } from "./deployment-lock.ts";
 import {
 	type DeploymentRunSettings,
 	deploymentRunHandler,
@@ -87,6 +88,7 @@ beforeAll(() => {
 
 afterEach(async () => {
 	for (const { deploymentId, buildId } of created.splice(0)) {
+		await edge.unpublish(deploymentId);
 		await runtime.removeContainer(deploymentId);
 		await runtime.removeNetwork(deploymentId);
 		await runtime.removeImage(imageName(deploymentId, buildId));
@@ -97,7 +99,14 @@ afterAll(() => {
 	rmSync(base, { recursive: true, force: true });
 });
 
-const deps = () => ({ db, runtime, log: pino({ level: "silent" }), settings });
+const edge = testEdge(runtime);
+const deps = () => ({
+	db,
+	runtime,
+	edge,
+	log: pino({ level: "silent" }),
+	settings,
+});
 const job = (deploymentId: string) => ({
 	id: randomUUID(),
 	data: { deploymentId },
@@ -144,7 +153,7 @@ async function queued(dockerfileText: string) {
 			...job(ids.deploymentId),
 			data: ids,
 		});
-	return { ...ids, archive, run };
+	return { ...ids, subdomain: deployment?.subdomain as string, archive, run };
 }
 
 /** A deployment whose app is up and healthy. */
@@ -173,6 +182,14 @@ function runJob(action: keyof typeof ACTIONS, deploymentId: string) {
 async function perform(action: keyof typeof ACTIONS, deploymentId: string) {
 	await request(action, deploymentId);
 	await runJob(action, deploymentId);
+}
+
+async function routeIdOf(deploymentId: string) {
+	const [row] = await db
+		.select({ routeId: deployments.routeId })
+		.from(deployments)
+		.where(eq(deployments.id, deploymentId));
+	return row?.routeId;
 }
 
 async function statusOf(deploymentId: string) {
@@ -212,10 +229,13 @@ async function exists(path: string) {
 
 describe("stop and start", { timeout: 120_000 }, () => {
 	test("stops the app and starts it again without a rebuild", async () => {
-		const { deploymentId, buildId } = await ready();
+		const { deploymentId, buildId, subdomain } = await ready();
 		const before = await runtime.inspect(deploymentId);
+		expect((await viaEdge(subdomain)).status).toBe(200);
 
 		await perform("stop", deploymentId);
+		expect((await viaEdge(subdomain)).status).toBe(404);
+		expect(await routeIdOf(deploymentId)).toBeNull();
 		const stopped = await runtime.inspect(deploymentId);
 		expect(stopped?.running).toBe(false);
 		// Stays stopped across Docker restarts, but is kept.
@@ -234,10 +254,15 @@ describe("stop and start", { timeout: 120_000 }, () => {
 		expect(started?.restartPolicy).toBe("unless-stopped");
 		expect(await answers(deploymentId)).toBe("hello-from-petri\n");
 		expect(buildLog(buildId)).toContain("[petri] Starting the app again");
+		expect(await viaEdge(subdomain)).toEqual({
+			status: 200,
+			body: "hello-from-petri\n",
+		});
+		expect(await routeIdOf(deploymentId)).toBe(`petri-route-${deploymentId}`);
 	});
 
 	test("a start that fails says why and keeps the app's output", async () => {
-		const { deploymentId, buildId } = await ready(FIRST_START_ONLY);
+		const { deploymentId, buildId, subdomain } = await ready(FIRST_START_ONLY);
 		await perform("stop", deploymentId);
 		await perform("start", deploymentId);
 
@@ -251,6 +276,7 @@ describe("stop and start", { timeout: 120_000 }, () => {
 		const container = await runtime.inspect(deploymentId);
 		expect(container?.running).toBe(false);
 		expect(container?.restartPolicy).toBe("no");
+		expect((await viaEdge(subdomain)).status).toBe(404);
 	});
 
 	test("a start without a container fails clearly", async () => {
@@ -266,9 +292,10 @@ describe("stop and start", { timeout: 120_000 }, () => {
 });
 
 describe("delete", { timeout: 120_000 }, () => {
-	test("removes container, network, image and upload; keeps the history", async () => {
-		const { deploymentId, buildId, archive } = await ready();
+	test("removes route, container, network, image and upload; keeps the history", async () => {
+		const { deploymentId, buildId, archive, subdomain } = await ready();
 		await perform("delete", deploymentId);
+		expect((await viaEdge(subdomain)).status).toBe(404);
 
 		expect(await statusOf(deploymentId)).toBe("deleted");
 		expect((await history(deploymentId)).map((e) => e.to).slice(-2)).toEqual([
@@ -289,7 +316,11 @@ describe("delete", { timeout: 120_000 }, () => {
 			.select()
 			.from(deployments)
 			.where(eq(deployments.id, deploymentId));
-		expect(row).toMatchObject({ containerId: null, imageId: null });
+		expect(row).toMatchObject({
+			containerId: null,
+			imageId: null,
+			routeId: null,
+		});
 	});
 
 	test("a stopped deployment is deleted too", async () => {

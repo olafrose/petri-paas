@@ -13,6 +13,7 @@ export const galleryItem = z
 		deployment: z.object({
 			name: z.string().meta({ description: "Branch or version shown" }),
 			status: z.literal("ready"),
+			url: z.url().meta({ description: "Where to try it" }),
 		}),
 	})
 	.meta({ id: "GalleryItem" });

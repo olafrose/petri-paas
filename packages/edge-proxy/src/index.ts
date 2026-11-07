@@ -7,4 +7,5 @@ export {
 	edgeApps,
 	edgeConfig,
 	type PreviewRoute,
+	routeId,
 } from "./caddy-edge-proxy.ts";

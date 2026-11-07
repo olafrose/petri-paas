@@ -12,6 +12,7 @@ import { createAuth } from "../src/auth/auth.ts";
 import { setOwner } from "../src/auth/owner.ts";
 
 export const publicUrl = "http://localhost:3000";
+export const previewBaseUrl = "https://app.example.com";
 export const owner = {
 	email: "owner@example.com",
 	name: "Owner",
@@ -54,6 +55,7 @@ export function useTestApp() {
 			logsDir,
 			uploads: { uploadsDir, maxUploadBytes: 1024 * 1024 },
 			publicUrl,
+			previewBaseUrl,
 		});
 		await app.ready();
 	});

@@ -54,6 +54,12 @@ panel.
 The API applies database migrations on startup; start it before the
 worker on a fresh database.
 
+Previews are served by the edge proxy: a ready deployment answers at
+`http://<subdomain>.app.localhost:8088` (its `url` in the API). The
+worker routes it once its health check passes, and restores all routes
+when it starts and every 30 seconds, so a restarted edge proxy recovers
+by itself.
+
 ## Running the full stack in containers
 
 ```bash
