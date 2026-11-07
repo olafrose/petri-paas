@@ -1,6 +1,7 @@
 import { BuildError, SourceError } from "@petri/build-engine";
 import {
 	type DockerRuntime,
+	type HealthCheckResult,
 	LimitsNotEnforcedError,
 	waitForHealthy,
 } from "@petri/runtime";
@@ -64,6 +65,10 @@ export async function choosePort(
 	return first;
 }
 
+/**
+ * Waits for the app to answer. An app that stops, even before it got an
+ * address, is a failed check like any other, so callers keep its output.
+ */
 export async function checkHealth(
 	runtime: DockerRuntime,
 	settings: HealthSettings,
@@ -71,13 +76,19 @@ export async function checkHealth(
 	network: string,
 	port: number,
 	signal: AbortSignal,
-) {
+): Promise<HealthCheckResult> {
 	// In a container, the worker must join the app's network to reach it.
 	if (settings.workerContainer) {
 		await runtime.connect(network, settings.workerContainer);
 	}
 	try {
-		const address = await waitForAddress(runtime, deploymentId, network);
+		let address: string;
+		try {
+			address = await waitForAddress(runtime, deploymentId, network);
+		} catch (error) {
+			if (!(error instanceof StepFailure)) throw error;
+			return { healthy: false, reason: error.message, attempts: 0 };
+		}
 		return await waitForHealthy({
 			url: `http://${address}:${port}/`,
 			signal,
