@@ -13,9 +13,13 @@ Wants=network-pre.target
 [Service]
 Type=oneshot
 RemainAfterExit=yes
+# access.nft (who may reach the host) exists on the production host only.
 ExecStart=/usr/sbin/nft -f /etc/petri/petri.nft
+ExecStart=/bin/sh -c 'test ! -e /etc/petri/access.nft || /usr/sbin/nft -f /etc/petri/access.nft'
 ExecReload=/usr/sbin/nft -f /etc/petri/petri.nft
+ExecReload=/bin/sh -c 'test ! -e /etc/petri/access.nft || /usr/sbin/nft -f /etc/petri/access.nft'
 ExecStop=/usr/sbin/nft delete table inet petri
+ExecStop=-/usr/sbin/nft delete table inet petri_access
 
 [Install]
 WantedBy=multi-user.target
