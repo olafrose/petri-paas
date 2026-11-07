@@ -314,17 +314,99 @@ ZIP archive, which only served rebuilds.
 
 **Result:** a project builds and runs locally (no public URL yet).
 
-## Phase 3 --- Public previews (outline)
+## Phase 3 --- Public previews
 
--   Caddy edge proxy and `CaddyEdgeProxyProvider`; admin API on an
-    internal network only.
--   Subdomain generation.
--   Egress filtering on the petri. host: containers and builds cannot
-    reach private address ranges. **Required before anything is
-    public.**
--   Firewall: only the NPM VM reaches the edge proxy and web ports.
--   Static NPM proxy hosts, documented in `docs/operations.md`.
--   First installation on the production VM.
+**Goal:** a ready deployment is reachable at its public URL through NPM
+and the petri. edge proxy, and nothing petri. runs can reach the LAN.
+
+**Order matters:** 3.3 (egress filtering) must be in place on the
+production host before 3.5 makes anything public.
+
+Subdomain generation, listed in the outline, was done in 2.2 (unique,
+DNS-safe, from project and deployment name); 3.2 turns it into a URL.
+
+### 3.1 Edge proxy
+
+-   Caddy as its own service (dev and production Compose), publishing
+    one port for preview traffic (`EDGE_BIND:EDGE_PORT`). Unknown
+    hostnames get a 404 from Caddy itself and never fall through.
+-   **Admin API on a Unix socket** in a volume shared only with the
+    worker. Not on a network: the edge proxy joins every deployment's
+    network, and Caddy's admin API has no authentication, so a TCP
+    listener would let any app rewrite the routes.
+-   `packages/edge-proxy`: `CaddyEdgeProxyProvider` with idempotent
+    `setRoute` (hostname → container and port, keyed by deployment),
+    `removeRoute` and `listRoutes`, using Caddy's `@id` addressing.
+-   `X-Forwarded-*` trusted only from configured proxies (the NPM VM in
+    production); WebSockets pass through.
+
+**Done when:** integration tests against a real Caddy show that routes
+are created, replaced and removed idempotently; that an unknown host
+gets 404; and that the admin API is not reachable over the network.
+
+### 3.2 Routes in the deployment lifecycle
+
+-   `PREVIEW_DOMAIN` (e.g. `app.example.com`; `app.localhost` in
+    development) and `PREVIEW_SCHEME`; the API returns each deployment's
+    `url`.
+-   Deployment and start jobs: after the health check, the edge proxy
+    joins the deployment's network and the route is set, then `ready`.
+    A broken app is never routed.
+-   Stop, delete, failure and expiry remove the route first; delete
+    also disconnects the edge proxy, or the network can't be removed.
+-   Routes are rebuilt from the database when the worker starts and
+    checked every few minutes, so a restarted Caddy (which forgets
+    routes set through its API) recovers by itself.
+
+**Done when:** a ready deployment answers through the edge proxy by
+hostname; stopped and deleted ones get 404; routes come back after
+Caddy restarts; route failures leave the deployment retryable, not
+half-ready.
+
+### 3.3 Egress filtering
+
+-   Deployment networks get their subnets from a dedicated pool
+    (`APP_SUBNET_POOL`), and BuildKit its own network, so host rules
+    can tell petri.'s traffic apart.
+-   nftables rules on the host (`infrastructure/firewall/`, applied by a
+    systemd unit): from those subnets, new connections to private and
+    special ranges are dropped (RFC 1918, loopback, link-local
+    including `169.254.169.254`, CGNAT `100.64.0.0/10`, IPv6 ULA and
+    link-local), as are connections to the host's own addresses.
+    Replies (the edge proxy and worker talking to an app) still work;
+    DNS goes through Docker's resolver.
+-   A probe script that runs a container on a deployment network and a
+    build step, and checks what they can and can't reach.
+
+**Done when:** the probe passes in CI and on the development machine:
+public internet reachable; the LAN, the host, metadata addresses and
+other deployments are not; previews still answer through the edge
+proxy.
+
+### 3.4 Production setup
+
+-   CI publishes `linux/amd64` images to GHCR from `main`; the
+    production Compose file uses them instead of building.
+-   Host firewall (same nftables setup): only the NPM VM reaches the web
+    and edge ports; SSH from the admin network only. `TRUST_PROXY` and
+    the edge proxy's trusted proxies set to the NPM VM.
+-   `docs/operations.md`: VM preparation (Docker, cgroups, nftables),
+    configuration, the two static NPM proxy hosts, DNS records, the
+    wildcard certificate via DNS-01, installing and upgrading.
+
+**Done when:** following `docs/operations.md` on a fresh VM gives a
+running stack with the firewall active and the probe from 3.3 passing.
+
+### 3.5 First installation (owner)
+
+-   Install on the Proxmox VM following `docs/operations.md`; create
+    the NPM proxy hosts and certificate.
+-   Deploy a sample app and open it from outside the homelab (e.g. a
+    phone on mobile data); open the admin panel through
+    `petri.example.com`.
+
+**Done when:** both work from outside, and the probe passes on the
+production host.
 
 **Result:** a preview is reachable from outside the homelab.
 
