@@ -59,6 +59,9 @@ function get(host: string, path = "/", headers: Record<string, string> = {}) {
 			{
 				host: edgeUrl.hostname,
 				port: edgeUrl.port,
+				// Fresh each time, as from NPM: route changes reload Caddy,
+				// which closes idle connections.
+				agent: false,
 				path,
 				headers: { host, ...headers },
 			},

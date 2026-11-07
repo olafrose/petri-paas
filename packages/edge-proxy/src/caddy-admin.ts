@@ -13,9 +13,15 @@ export class CaddyAdminError extends Error {
 /**
  * Caddy's admin API over its Unix socket. The API has no authentication;
  * the socket's file permissions are the only access control.
+ *
+ * Each change reloads Caddy, which closes its connections: a request
+ * sent during another one's reload, or on a reused connection, may get
+ * "socket hang up". So requests go one at a time, each on a connection
+ * of its own.
  */
 export class CaddyAdminClient {
 	readonly #socketPath: string;
+	#queue: Promise<unknown> = Promise.resolve();
 
 	constructor(socketPath: string) {
 		this.#socketPath = socketPath;
@@ -29,13 +35,24 @@ export class CaddyAdminClient {
 	call<T = unknown>(
 		method: string,
 		path: string,
-		{ json, accept = [] }: { json?: unknown; accept?: readonly number[] } = {},
+		options: { json?: unknown; accept?: readonly number[] } = {},
+	): Promise<{ status: number; body: T }> {
+		const result = this.#queue.then(() => this.#send<T>(method, path, options));
+		this.#queue = result.catch(() => {});
+		return result;
+	}
+
+	#send<T>(
+		method: string,
+		path: string,
+		{ json, accept = [] }: { json?: unknown; accept?: readonly number[] },
 	): Promise<{ status: number; body: T }> {
 		const payload = json === undefined ? undefined : JSON.stringify(json);
 		return new Promise((resolve, reject) => {
 			const req = request(
 				{
 					socketPath: this.#socketPath,
+					agent: false,
 					method,
 					path,
 					// No Origin header: Caddy refuses admin requests that have one.
