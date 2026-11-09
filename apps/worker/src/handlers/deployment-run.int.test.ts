@@ -35,6 +35,7 @@ import {
 	vi,
 } from "vitest";
 import { testEdge, viaEdge } from "../../test/edge.ts";
+import { imageName } from "./app-runtime.ts";
 import {
 	type DeploymentRunSettings,
 	deploymentRunHandler,
@@ -49,7 +50,8 @@ const localBuildctl = new URL(
 	import.meta.url,
 ).pathname;
 const base = mkdtempSync(join(tmpdir(), "petri-job-"));
-const deploymentIds: string[] = [];
+/** Everything a test deployed, removed after each test. */
+const deployed: { deploymentId: string; buildId: string }[] = [];
 
 const httpd = (port: number) =>
 	`CMD ["sh", "-c", "echo app starting; exec httpd -f -p ${port} -h /www"]`;
@@ -98,10 +100,12 @@ beforeAll(async () => {
 });
 
 afterEach(async () => {
-	for (const id of deploymentIds.splice(0)) {
-		await edge.unpublish(id);
-		await runtime.removeContainer(id);
-		await runtime.removeNetwork(id);
+	for (const { deploymentId, buildId } of deployed.splice(0)) {
+		await edge.unpublish(deploymentId);
+		await runtime.removeContainer(deploymentId);
+		await runtime.removeNetwork(deploymentId);
+		// Once the container is gone, its image isn't used any more.
+		await runtime.removeImage(imageName(deploymentId, buildId));
 	}
 });
 
@@ -147,7 +151,7 @@ async function deploy(
 		.values({ deploymentId: deployment?.id as string })
 		.returning();
 	const deploymentId = deployment?.id as string;
-	deploymentIds.push(deploymentId);
+	deployed.push({ deploymentId, buildId: build?.id as string });
 	const job = {
 		id: randomUUID(),
 		data: { deploymentId, buildId: build?.id as string },

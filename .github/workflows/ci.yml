@@ -150,6 +150,20 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: pnpm test:integration
 
+      # Tests clean up what they create; a forgotten image or container
+      # would pile up on every developer's machine.
+      - name: Nothing left behind by the integration tests
+        run: |
+          left="$(docker images -q 'petri/*'; docker images -q 'petri-test/*'
+            docker ps -aq --filter label=dev.petri.managed
+            docker network ls -q --filter label=dev.petri.managed)"
+          if [ -n "$left" ]; then
+            docker images 'petri*/*'
+            docker ps -a --filter label=dev.petri.managed
+            docker network ls --filter label=dev.petri.managed
+            exit 1
+          fi
+
       - name: Migrations match the schema
         run: |
           pnpm db:generate
