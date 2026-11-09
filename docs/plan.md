@@ -419,12 +419,144 @@ production host.
 `docs/operations.md`, the probe passes there, and a test app was opened
 from a phone on mobile data.
 
-## Phase 4 --- Dashboard and gallery (outline)
+## Phase 4 --- Dashboard and gallery
 
--   Admin dashboard: projects, deployments, logs, actions, API keys.
--   Public gallery with featured deployment, uploaded preview image and
-    **Try it** action.
--   Lab-notebook visual design.
+**Goal:** petri. becomes usable as a personal lab notebook and public
+showroom: everything the API can do is possible in the admin panel, and
+the gallery shows experiments worth trying.
+
+**Starting point:** the API covers projects, deployments (Git and ZIP),
+stop/start/delete, live events, build logs and API keys. The web app is
+the skeleton from 1.8: gallery list, login, an admin page that counts
+projects. Phase 3's installation showed the gap: the first deployment
+needed curl.
+
+**Order:** 4.1 settles the look before screens are built; 4.2 gives them
+a common base. 4.5 and 4.7 are API work and can come earlier if useful.
+
+### 4.1 Visual design (owner decides)
+
+-   A proposal first, as a living style page at `/admin/styleguide`:
+    paper and ink colours, a handwritten accent font, body and monospace
+    fonts, experiment numbers (`EXP-007`), date stamps, status stamps
+    (ready, building, failed, stopped), labels, buttons, form fields,
+    a log view, small hand-drawn sketches (SVG) for empty states.
+-   Fonts are self-hosted (no requests to third parties from the
+    gallery) and openly licensed.
+-   Contrast meets WCAG AA; handwriting only for accents, never for
+    content that must be read; usable on a phone.
+
+**Decisions for the owner** (proposals to choose from, made in the
+style page):
+
+-   Handwritten font, e.g. *Caveat*, *Kalam* or *Patrick Hand*.
+-   Body font: the system font, or e.g. *IBM Plex Sans* with *IBM Plex
+    Mono*.
+-   How far the notebook look goes: ruled paper, margin line, tape and
+    stamps everywhere, or only in headings and the gallery.
+-   A dark ("night lab") variant: now, later, or never.
+
+**Done when:** the owner has picked the options and the style page shows
+the result; the tokens and components are what 4.2--4.8 use.
+
+### 4.2 Web foundations
+
+-   Shared components from 4.1; layout for the admin area with
+    navigation (experiments, API keys, settings) and the signed-in user.
+-   Changes go from the browser to the API through the web app's
+    `/api/v1` forwarding (one origin, the session cookie, the origin
+    check), with the API's error messages shown next to the form.
+-   Live updates from the events stream (`EventSource`), reconnecting
+    with `Last-Event-ID`; loading, empty and error states everywhere.
+-   End-to-end tests with Playwright against the full stack in CI: sign
+    in, sign out, a protected page without a session.
+
+**Done when:** the admin layout and the test setup are in place, and a
+change made through a form round-trips through the API in an end-to-end
+test.
+
+### 4.3 Experiments (projects)
+
+-   Overview: projects as notebook entries with experiment number,
+    name, description, current deployment status and last change; the
+    newest first.
+-   Create and edit: name, description, visibility, the featured
+    deployment for the gallery, and the personal notes (Markdown,
+    rendered safely; notes never leave the admin area).
+-   Delete, explaining the 409 when deployments remain.
+-   Experiment numbers are stable: a sequential `number` on projects,
+    assigned on creation (migration), not derived from the list order.
+
+**Done when:** a project can be created, described, annotated and
+deleted from the browser, and its number never changes.
+
+### 4.4 Deployments
+
+-   Deploy from the dashboard: from Git (repository, ref, directory,
+    port, build arguments, lifecycle) and by ZIP upload, with the same
+    validation messages as the API.
+-   Deployment page: status stamp, preview URL, source and commit,
+    lifecycle and expiry, the history as a timeline that updates live,
+    and the actions the API offers (stop, start, delete) with
+    confirmation for delete.
+-   Build log: shown while it is written (incremental, with the
+    `x-log-offset` mechanism), kept readable for long logs.
+
+**Done when:** an app can be deployed, followed live, opened, stopped,
+started and deleted without leaving the browser, covered by an
+end-to-end test.
+
+### 4.5 Runtime logs
+
+-   As proposed in 2.8: the API asks the worker through the job queue
+    (`deployment.logs`); the worker writes the app's last lines (up to a
+    limit) to the shared logs volume; the API returns them. The API
+    still has no Docker access.
+-   `GET /deployments/:id/logs?source=runtime`; shown on the deployment
+    page, refreshable.
+
+**Done when:** a running app's output is visible in the dashboard, and
+a request for a deployment without a container answers clearly.
+
+### 4.6 API keys and settings
+
+-   API keys: list (name, prefix, scopes, last used, expiry), create
+    (the key shown once, with a copy button and the curl line to use
+    it), revoke.
+-   Settings, read-only: admin and preview URLs, version (commit), and
+    the limits in force (upload size, build timeout, container limits).
+    Changing settings stays in `.env`.
+
+**Done when:** keys can be managed without curl, and a revoked key
+stops working (end-to-end test).
+
+### 4.7 Preview images
+
+-   `PUT /projects/:id/image` (owner and `deploy:update`): PNG, JPEG or
+    WebP, at most 2 MB, checked by content (magic bytes and dimensions),
+    not by name or declared type; stored in the uploads volume.
+-   `GET /gallery/:slug/image`: public, only for projects shown in the
+    gallery, served with a fixed content type, `nosniff` and caching.
+-   Upload and remove it on the project page.
+
+**Done when:** an image appears on the gallery card, and files that
+aren't images, or are too large, are refused (tests with crafted files).
+
+### 4.8 Public gallery
+
+-   Cards: preview image (or a sketch as placeholder), name,
+    description, branch or version, status, last update, and **Try it**
+    opening the preview URL.
+-   Responsive, fast without JavaScript (server-rendered), page title and
+    link previews (Open Graph, using the preview image).
+-   Shows only what the API's gallery response contains; a test makes
+    sure notes, sources and internal details never reach the page.
+
+**Done when:** from a phone outside the homelab, the gallery shows the
+featured experiments with images, and **Try it** opens them.
+
+**Result:** petri. is usable as a personal lab notebook and public
+showroom, without curl.
 
 ## Phase 5 --- Lifecycle and automation (outline)
 
