@@ -1,5 +1,11 @@
 import type { DeploymentStatus } from "@petri/contracts";
-import type { ComponentProps, ReactNode } from "react";
+import {
+	type ComponentProps,
+	cloneElement,
+	type ReactElement,
+	type ReactNode,
+	useId,
+} from "react";
 import styles from "./notebook.module.css";
 
 /*
@@ -96,7 +102,10 @@ export function ButtonLink({
 	return <a className={variantClass(variant)} {...props} />;
 }
 
-/** A labelled form field with an optional hint or error below it. */
+/**
+ * A labelled form field. The label names the control; the hint or error
+ * below describes it (aria-describedby), so it isn't part of its name.
+ */
 export function Field({
 	label,
 	hint,
@@ -104,21 +113,34 @@ export function Field({
 	children,
 }: {
 	label: string;
-	hint?: string;
-	error?: string;
-	children: ReactNode;
+	hint?: string | undefined;
+	error?: string | undefined;
+	/** One control: input, textarea or select. */
+	children: ReactElement<{
+		id?: string;
+		"aria-describedby"?: string;
+		"aria-invalid"?: boolean;
+	}>;
 }) {
+	const id = useId();
+	const note = error ?? hint;
 	return (
-		// biome-ignore lint/a11y/noLabelWithoutControl: the control is passed as children, inside the label
-		<label className={styles.field}>
-			{label}
-			{children}
-			{error ? (
-				<span className={styles.fieldError}>{error}</span>
-			) : (
-				hint && <span className={styles.hint}>{hint}</span>
+		<div className={styles.field}>
+			<label htmlFor={id}>{label}</label>
+			{cloneElement(children, {
+				id,
+				...(note && { "aria-describedby": `${id}-note` }),
+				...(error && { "aria-invalid": true }),
+			})}
+			{note && (
+				<span
+					id={`${id}-note`}
+					className={error ? styles.fieldError : styles.hint}
+				>
+					{note}
+				</span>
 			)}
-		</label>
+		</div>
 	);
 }
 

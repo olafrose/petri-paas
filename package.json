@@ -13,6 +13,7 @@
 		"typecheck": "tsc -p tsconfig.json && pnpm -r --if-present typecheck",
 		"test": "vitest run",
 		"test:integration": "vitest run --config vitest.integration.config.ts",
+		"test:e2e": "scripts/e2e.sh",
 		"build": "pnpm -r --if-present build",
 		"dev:infra": "mkdir -p .tools/edge && docker compose -f infrastructure/compose/dev.yml up -d --wait",
 		"dev:infra:down": "docker compose -f infrastructure/compose/dev.yml down",
@@ -27,6 +28,7 @@
 	"devDependencies": {
 		"@biomejs/biome": "2.6.5",
 		"@petri/config": "workspace:*",
+		"@playwright/test": "1.65.0",
 		"@types/node": "^24.19.2",
 		"@types/pg": "8.23.1",
 		"pg": "8.23.1",

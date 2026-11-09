@@ -164,6 +164,25 @@ jobs:
             exit 1
           fi
 
+      # The whole stack in a browser, under the firewall (scripts/e2e.sh).
+      - name: Install the browser for end-to-end tests
+        run: pnpm exec playwright install --with-deps chromium
+
+      - name: End-to-end tests
+        env:
+          E2E_BROWSER: local
+        run: pnpm test:e2e
+
+      - name: Keep the end-to-end report
+        if: failure()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: e2e-report
+          path: |
+            e2e/report
+            e2e/results
+          retention-days: 14
+
       - name: Migrations match the schema
         run: |
           pnpm db:generate

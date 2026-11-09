@@ -41,6 +41,7 @@ Commands:
 | `pnpm dev:infra:down` | Stop local services                 |
 | `pnpm dev:check-db` | Check the database connection         |
 | `pnpm test:integration` | Run integration tests (needs PostgreSQL) |
+| `pnpm test:e2e` | Browser tests against the whole stack (needs `pnpm dev:infra`; stop your dev worker first) |
 | `pnpm db:generate` | Generate a SQL migration after changing the schema |
 | `pnpm db:migrate` | Apply pending migrations to `DATABASE_URL` |
 | `pnpm dev:api`   | Run the API with reload on change (port 4000) |
