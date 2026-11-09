@@ -1,0 +1,169 @@
+/* Notebook components: stamps, labels, buttons, fields, logs, sketches. */
+
+.hand {
+	font-family: var(--font-hand);
+	font-weight: 700;
+	font-size: calc(1.35rem * var(--hand-scale));
+	line-height: 1.1;
+}
+h1.hand {
+	font-size: calc(2.6rem * var(--hand-scale));
+}
+h2.hand {
+	font-size: calc(1.9rem * var(--hand-scale));
+}
+h3.hand {
+	font-size: calc(1.55rem * var(--hand-scale));
+}
+
+.experiment {
+	font-family: var(--font-mono);
+	font-size: 0.8rem;
+	letter-spacing: 0.08em;
+	color: var(--accent);
+	border-bottom: 1px dashed currentColor;
+}
+
+.date {
+	display: inline-block;
+	font-family: var(--font-mono);
+	font-size: 0.75rem;
+	letter-spacing: 0.12em;
+	text-transform: uppercase;
+	color: var(--ink-soft);
+	border: 1px solid currentColor;
+	border-radius: 3px;
+	padding: 0 0.4em;
+}
+
+/* A rubber stamp: uneven border, slight tilt, ink a little faded. */
+.stamp {
+	display: inline-block;
+	font-family: var(--font-mono);
+	font-size: 0.75rem;
+	font-weight: 500;
+	letter-spacing: 0.14em;
+	text-transform: uppercase;
+	padding: 0.15em 0.6em;
+	border: 2px solid currentColor;
+	border-radius: 4px 7px 5px 6px;
+	transform: rotate(-2.5deg);
+	opacity: 0.9;
+	white-space: nowrap;
+}
+
+.ok {
+	color: var(--ok);
+}
+.busy {
+	color: var(--busy);
+	border-style: dashed;
+}
+.failed {
+	color: var(--danger);
+	transform: rotate(2deg);
+}
+.idle {
+	color: var(--muted);
+}
+
+.label {
+	display: inline-block;
+	font-size: 0.75rem;
+	padding: 0.05em 0.5em;
+	border-radius: 999px;
+	background: var(--paper-line);
+	color: var(--ink);
+}
+
+.button {
+	font: inherit;
+	font-weight: 500;
+	padding: var(--space-2) var(--space-3);
+	border-radius: var(--radius);
+	border: 1px solid var(--ink);
+	background: var(--ink);
+	color: var(--paper);
+	cursor: pointer;
+	text-decoration: none;
+	display: inline-block;
+}
+.button:hover {
+	background: var(--accent);
+	border-color: var(--accent);
+}
+.secondary {
+	background: transparent;
+	color: var(--ink);
+}
+.secondary:hover {
+	background: var(--paper-line);
+	border-color: var(--ink);
+}
+.danger {
+	background: transparent;
+	color: var(--danger);
+	border-color: var(--danger);
+}
+.danger:hover {
+	background: var(--danger);
+	color: var(--paper);
+	border-color: var(--danger);
+}
+
+.field {
+	display: flex;
+	flex-direction: column;
+	gap: var(--space-1);
+	font-size: 0.9rem;
+}
+.field input,
+.field textarea,
+.field select {
+	font: inherit;
+	padding: var(--space-2);
+	border: 1px solid var(--paper-line);
+	border-bottom: 2px solid var(--ink-soft);
+	border-radius: var(--radius) var(--radius) 2px 2px;
+	background: var(--paper-raised);
+	color: var(--ink);
+}
+.hint {
+	color: var(--ink-soft);
+	font-size: 0.8rem;
+}
+.fieldError {
+	color: var(--danger);
+	font-size: 0.8rem;
+}
+
+.log {
+	font-family: var(--font-mono);
+	font-size: 0.8rem;
+	line-height: 1.45;
+	background: var(--log-bg);
+	color: #e6e2d6;
+	border: 1px solid var(--paper-line);
+	border-radius: var(--radius);
+	padding: var(--space-3);
+	overflow: auto;
+	max-height: 18rem;
+	margin: 0;
+	white-space: pre-wrap;
+	word-break: break-word;
+}
+.logPetri {
+	color: #f2c46d;
+}
+
+.note {
+	font-family: var(--font-hand);
+	font-size: calc(1.15rem * var(--hand-scale) * 1.2);
+	color: var(--accent);
+	transform: rotate(-1deg);
+	display: inline-block;
+}
+
+.sketch {
+	color: var(--ink-soft);
+}
