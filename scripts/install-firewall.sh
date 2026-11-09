@@ -92,9 +92,17 @@ in_network() {
 		exit !(int(ip / size) == int(net / size))
 	}'
 }
-# Don't lock out the session running this.
-if [ -n "$ssh_from" ] && [ -n "${SSH_CONNECTION:-}" ]; then
-	client=${SSH_CONNECTION%% *}
+# Don't lock out the session running this. sudo drops SSH_CONNECTION;
+# `who -m` still knows where this terminal's session comes from.
+client=${SSH_CONNECTION:-}
+client=${client%% *}
+if [ -z "$client" ]; then
+	client=$(who -m 2>/dev/null | sed -n 's/.*(\([0-9.]*\)).*/\1/p')
+fi
+if [ -n "$ssh_from" ] && [ -z "$client" ]; then
+	echo "Note: can't tell where your session comes from; make sure it's from $ssh_from." >&2
+fi
+if [ -n "$ssh_from" ] && [ -n "$client" ]; then
 	if ! in_network "$client" "$ssh_from"; then
 		echo "Your SSH session comes from $client, outside $ssh_from: refusing to lock you out." >&2
 		exit 1
