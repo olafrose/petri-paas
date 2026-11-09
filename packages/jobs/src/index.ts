@@ -6,3 +6,9 @@ export {
 	type SendOptions,
 	type WorkOptions,
 } from "./queue.ts";
+export {
+	RUNTIME_LOGS_READY,
+	type RuntimeLogsResult,
+	runtimeLogsPath,
+	runtimeLogsResult,
+} from "./runtime-logs.ts";

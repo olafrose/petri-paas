@@ -8,6 +8,7 @@ import {
 	deploymentStartHandler,
 	deploymentStopHandler,
 } from "./deployment-actions.ts";
+import { deploymentLogsHandler } from "./deployment-logs.ts";
 import {
 	type DeploymentRunSettings,
 	deploymentRunHandler,
@@ -51,6 +52,12 @@ export async function registerHandlers(
 		"deployment.delete",
 		withLogging(deps.log, "deployment.delete", deploymentDeleteHandler(deps)),
 		{ concurrency: 2 },
+	);
+	// Someone waits for these: polled often, never behind a build.
+	await queue.work(
+		"deployment.logs",
+		withLogging(deps.log, "deployment.logs", deploymentLogsHandler(deps)),
+		{ concurrency: 2, pollingIntervalSeconds: 0.5 },
 	);
 }
 

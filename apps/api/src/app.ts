@@ -31,6 +31,8 @@ export interface AppOptions {
 	events: EventListener;
 	/** Where the worker writes build logs. */
 	logsDir: string;
+	/** How long to wait for the worker's answer with an app's output. */
+	runtimeLogsTimeoutMs?: number;
 	/** ZIP upload storage and limits. */
 	uploads: Pick<UploadOptions, "uploadsDir" | "maxUploadBytes" | "zipLimits">;
 	/** Public URL of the admin panel, e.g. https://petri.example.com. */
@@ -49,6 +51,7 @@ export async function buildApp({
 	jobs,
 	events,
 	logsDir,
+	runtimeLogsTimeoutMs,
 	uploads,
 	publicUrl,
 	previewBaseUrl,
@@ -97,7 +100,14 @@ export async function buildApp({
 	await app.register(galleryRoutes, { prefix, db, previewBaseUrl });
 	await app.register(projectRoutes, { prefix, db });
 	await app.register(deploymentRoutes, { prefix, db, jobs, previewBaseUrl });
-	await app.register(deploymentLiveRoutes, { prefix, db, events, logsDir });
+	await app.register(deploymentLiveRoutes, {
+		prefix,
+		db,
+		events,
+		logsDir,
+		jobs,
+		...(runtimeLogsTimeoutMs && { runtimeLogsTimeoutMs }),
+	});
 	await app.register(uploadRoutes, {
 		prefix,
 		db,

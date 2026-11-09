@@ -1,4 +1,5 @@
-import { open, stat } from "node:fs/promises";
+import { randomUUID } from "node:crypto";
+import { open, readFile, stat } from "node:fs/promises";
 import { join } from "node:path";
 import {
 	type DeploymentEvent,
@@ -12,6 +13,13 @@ import {
 	deployments,
 	type EventListener,
 } from "@petri/database";
+import {
+	type JobQueue,
+	RUNTIME_LOGS_READY,
+	type RuntimeLogsResult,
+	runtimeLogsPath,
+	runtimeLogsResult,
+} from "@petri/jobs";
 import { and, asc, desc, eq, gt } from "drizzle-orm";
 import type { FastifyPluginAsyncZod } from "fastify-type-provider-zod";
 import { z } from "zod";
@@ -21,6 +29,19 @@ const KEEPALIVE_MS = 15_000;
 /** Catches events whose notification was missed (listener reconnecting). */
 const SAFETY_POLL_MS = 5000;
 const MAX_LOG_CHUNK = 1024 * 1024;
+/** How long to wait for the worker's answer with an app's output. */
+const RUNTIME_LOGS_TIMEOUT_MS = 15_000;
+/** How often to look for the answer, in case its event got lost. */
+const RUNTIME_LOGS_POLL_MS = 1000;
+
+/** Statuses in which a deployment has no container: no need to ask. */
+const NO_CONTAINER: Record<string, string> = {
+	queued: "The app hasn't been built yet.",
+	cloning: "The app hasn't been built yet.",
+	building: "The app is still being built; its build log shows the progress.",
+	deleting: "The app is being removed.",
+	deleted: "The app was removed with the deployment.",
+};
 
 const notFound = () => new ApiError(404, "not_found", "Deployment not found");
 
@@ -29,8 +50,11 @@ export interface LiveOptions {
 	events: EventListener;
 	/** Where the worker writes build logs (shared volume). */
 	logsDir: string;
+	/** Asks the worker for an app's output. */
+	jobs: JobQueue;
 	keepaliveMs?: number;
 	safetyPollMs?: number;
+	runtimeLogsTimeoutMs?: number;
 }
 
 /** Server-Sent Events for a deployment's history, and its build log. */
@@ -40,10 +64,57 @@ export const deploymentLiveRoutes: FastifyPluginAsyncZod<LiveOptions> = async (
 		db,
 		events,
 		logsDir,
+		jobs,
 		keepaliveMs = KEEPALIVE_MS,
 		safetyPollMs = SAFETY_POLL_MS,
+		runtimeLogsTimeoutMs = RUNTIME_LOGS_TIMEOUT_MS,
 	},
 ) => {
+	/**
+	 * Asks the worker for the app's last lines and waits for its answer:
+	 * the event, or the file appearing if the event got lost.
+	 */
+	async function askWorker(
+		deploymentId: string,
+		lines: number,
+	): Promise<RuntimeLogsResult | null> {
+		const requestId = randomUUID();
+		const path = runtimeLogsPath(logsDir, requestId);
+		const read = () =>
+			readFile(path, "utf8").then(
+				(text) => runtimeLogsResult.parse(JSON.parse(text)),
+				() => null,
+			);
+
+		let wake = () => {};
+		// Subscribed before sending, so the answer can't come first.
+		const unsubscribe = events.subscribe((event) => {
+			if (event.type === RUNTIME_LOGS_READY && event.requestId === requestId)
+				wake();
+		});
+		try {
+			await jobs.send("deployment.logs", { deploymentId, requestId, lines });
+			const deadline = Date.now() + runtimeLogsTimeoutMs;
+			while (Date.now() < deadline) {
+				const result = await read();
+				if (result) return result;
+				await new Promise<void>((resolve) => {
+					const timer = setTimeout(
+						resolve,
+						Math.min(RUNTIME_LOGS_POLL_MS, deadline - Date.now()),
+					);
+					wake = () => {
+						clearTimeout(timer);
+						resolve();
+					};
+				});
+			}
+			return await read();
+		} finally {
+			unsubscribe();
+		}
+	}
+
 	const tags = ["deployments"];
 
 	app.get(
@@ -159,30 +230,78 @@ export const deploymentLiveRoutes: FastifyPluginAsyncZod<LiveOptions> = async (
 			config: { access: { scope: "deploy:read" } },
 			schema: {
 				tags,
-				summary: "A build's log",
-				description:
-					"Plain text. Pass `offset` (from the `x-log-offset` header of the previous response) to get only what was added since, e.g. to follow a running build.",
+				summary: "A build's log, or the app's output",
+				description: [
+					"Plain text.",
+					"",
+					"`source=build` (default): the build's log. Pass `offset` (from the `x-log-offset` header of the previous response) to get only what was added since, e.g. to follow a running build.",
+					"",
+					"`source=runtime`: the app's last `lines` lines of output (stdout and stderr), each starting with its time in UTC; at most 1 MB. The `x-container-status` header says whether the app is running. A deployment without a container (not built yet, failed, deleted) answers 409 with code `no_container`.",
+				].join("\n"),
 				params: idParams,
 				querystring: z.object({
+					source: z.enum(["build", "runtime"]).default("build"),
 					build: z
 						.uuid()
 						.optional()
-						.meta({ description: "Defaults to the latest build" }),
-					offset: z.coerce.number().int().min(0).default(0),
+						.meta({ description: "Build log: defaults to the latest build" }),
+					offset: z.coerce
+						.number()
+						.int()
+						.min(0)
+						.default(0)
+						.meta({ description: "Build log: where to continue" }),
+					lines: z.coerce
+						.number()
+						.int()
+						.min(1)
+						.max(1000)
+						.default(200)
+						.meta({ description: "App output: how many of the last lines" }),
 				}),
 				response: {
 					200: z.string().meta({ description: "Log text (text/plain)" }),
 					404: errorResponse,
+					409: errorResponse,
+					503: errorResponse,
 				},
 			},
 		},
 		async (request, reply) => {
 			const { id } = request.params;
 			const [exists] = await db
-				.select({ id: deployments.id })
+				.select({ id: deployments.id, status: deployments.status })
 				.from(deployments)
 				.where(eq(deployments.id, id));
 			if (!exists) throw notFound();
+
+			if (request.query.source === "runtime") {
+				const known = NO_CONTAINER[exists.status];
+				if (known) throw new ApiError(409, "no_container", known);
+				const result = await askWorker(id, request.query.lines);
+				if (!result) {
+					throw new ApiError(
+						503,
+						"worker_unavailable",
+						"The worker didn't answer in time. Is it running?",
+					);
+				}
+				if (!result.container) {
+					throw new ApiError(
+						409,
+						"no_container",
+						exists.status === "failed"
+							? "The app isn't there anymore: it was removed when the deployment failed. Its last output is in the build log."
+							: "The app has no container right now.",
+					);
+				}
+				return reply
+					.serializer((payload) => String(payload))
+					.header("content-type", "text/plain; charset=utf-8")
+					.header("x-container-status", result.container.status)
+					.header("x-log-truncated", String(result.truncated))
+					.send(result.text);
+			}
 
 			const [build] = await db
 				.select({ id: builds.id })

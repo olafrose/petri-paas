@@ -14,6 +14,7 @@ import { requestCookie } from "../../../../lib/session.ts";
 import styles from "../../dashboard.module.css";
 import { BuildLog } from "./build-log.tsx";
 import { DeploymentActions } from "./deployment-actions.tsx";
+import { RuntimeLog } from "./runtime-log.tsx";
 import { Timeline } from "./timeline.tsx";
 
 export const metadata: Metadata = { title: "Deployment" };
@@ -134,6 +135,12 @@ export default async function DeploymentPage({
 			<section className={styles.section}>
 				<Hand as="h2">History</Hand>
 				<Timeline deploymentId={current.id} initial={history.items} />
+			</section>
+
+			<section className={styles.section}>
+				<Hand as="h2">App output</Hand>
+				{/* Asked again whenever the status changes. */}
+				<RuntimeLog key={current.status} deploymentId={current.id} />
 			</section>
 
 			<section className={styles.section}>

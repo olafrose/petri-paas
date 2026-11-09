@@ -71,6 +71,25 @@ export const jobs = {
 			deleteAfterSeconds: 7 * 24 * 60 * 60,
 		},
 	},
+	/**
+	 * Writes the last lines of a deployment's app output to the logs
+	 * volume (see runtime-logs.ts), for the API, which has no Docker
+	 * access. Someone is waiting for the answer: no retries, and an old
+	 * job is pointless.
+	 */
+	"deployment.logs": {
+		data: z.object({
+			deploymentId: z.uuid(),
+			requestId: z.uuid(),
+			lines: z.int().min(1).max(1000),
+		}),
+		queue: {
+			retryLimit: 0,
+			expireInSeconds: 30,
+			retentionSeconds: 60 * 60,
+			deleteAfterSeconds: 60 * 60,
+		},
+	},
 } satisfies Record<string, { data: z.ZodType; queue: QueueOptions }>;
 
 export type JobName = keyof typeof jobs;

@@ -542,6 +542,17 @@ end-to-end test.
 **Done when:** a running app's output is visible in the dashboard, and
 a request for a deployment without a container answers clearly.
 
+**Decided:** the worker writes its answer to `logs/runtime/<request>.json`
+and publishes an event; the API waits up to 15 s for the event and also
+looks for the file each second, since events are best effort. The API
+keeps its read-only mount of the logs volume; the worker removes answers
+older than five minutes. At most 1,000 lines and 1 MB per answer, times
+to the second in UTC. Statuses without a container (not built yet,
+deleting, deleted) answer 409 `no_container` without asking the worker;
+a worker that doesn't answer gives 503 `worker_unavailable`. The output
+is a snapshot, loaded with the page and on **Refresh**, not followed
+live.
+
 ### 4.6 API keys and settings
 
 -   API keys: list (name, prefix, scopes, last used, expiry), create
