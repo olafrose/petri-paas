@@ -60,6 +60,13 @@ describe("POST /projects", () => {
 		expect(response.json<ErrorResponse>().error.code).toBe("conflict");
 	});
 
+	test("numbers projects in order, without gaps from refused ones", async () => {
+		const { project: first } = await createProject({ name: "Demo" });
+		await createProject({ name: "Demo" });
+		const { project: second } = await createProject({ name: "Other" });
+		expect([first.number, second.number]).toEqual([1, 2]);
+	});
+
 	test("rejects invalid input with field details", async () => {
 		const { response } = await createProject({ name: "", slug: "Bad Slug" });
 		expect(response.statusCode).toBe(400);

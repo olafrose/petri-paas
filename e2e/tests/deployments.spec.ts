@@ -1,9 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { fixtureZip, signIn, statusStamp, unique } from "./helpers.ts";
-
-test.beforeEach(async ({ page }) => {
-	await signIn(page);
-});
+import { fixtureZip, statusStamp, unique } from "./helpers.ts";
 
 test("the API's validation shows next to the field", async ({ page }) => {
 	await page.goto("/admin/deploy");
@@ -46,6 +42,22 @@ test("deploy a ZIP, open it, stop, start and delete it", async ({
 	);
 	await preview.close();
 
+	// Featured on its experiment's page, it appears in the public gallery.
+	await page
+		.getByRole("link", { name: new RegExp(`EXP-\\d+ ${project}`) })
+		.click();
+	await page.getByRole("link", { name: "Edit" }).click();
+	await page.getByLabel("Description").fill("Says hello.");
+	await page
+		.getByLabel("Featured deployment")
+		.selectOption({ label: "first (ready)" });
+	await page.getByRole("button", { name: "Save" }).click();
+	await expect(page.getByText("In the gallery, with “first”.")).toBeVisible();
+	const gallery = await context.newPage();
+	await gallery.goto("/");
+	await expect(gallery.getByText("Says hello.")).toBeVisible();
+	await gallery.close();
+
 	// Listed on the overview, with a link to open it.
 	await page.goto("/admin");
 	const entry = page.locator("li", { hasText: project }).first();
@@ -63,4 +75,37 @@ test("deploy a ZIP, open it, stop, start and delete it", async ({
 	await page.getByRole("button", { name: "Delete" }).click();
 	await expect(statusStamp(page)).toHaveText("deleted", { timeout: 60_000 });
 	await expect(page.getByRole("button", { name: "Start" })).toHaveCount(0);
+
+	// With its deployment gone, the experiment can be deleted too.
+	await page
+		.getByRole("link", { name: new RegExp(`EXP-\\d+ ${project}`) })
+		.click();
+	await expect(
+		page.getByText("1 deleted deployment (history kept)"),
+	).toBeVisible();
+	page.once("dialog", (dialog) => dialog.accept());
+	await page.getByRole("button", { name: "Delete experiment" }).click();
+	await expect(page).toHaveURL((url) => url.pathname === "/admin");
+	await expect(page.getByText(project)).toHaveCount(0);
+});
+
+test("an experiment with deployments can't be deleted yet", async ({
+	page,
+}) => {
+	const project = unique("e2e-keep");
+	await page.goto("/admin/deploy");
+	await page.getByRole("button", { name: "ZIP upload" }).click();
+	await page.getByLabel("ZIP archive").setInputFiles(fixtureZip("hello"));
+	await page.getByLabel("Project").fill(project);
+	await page.getByRole("button", { name: "Deploy" }).click();
+	await expect(page).toHaveURL(/\/admin\/deployments\/[0-9a-f-]+$/);
+
+	await page
+		.getByRole("link", { name: new RegExp(`EXP-\\d+ ${project}`) })
+		.click();
+	const remove = page.getByRole("button", { name: "Delete experiment" });
+	await expect(remove).toBeDisabled();
+	await expect(remove).toHaveAccessibleDescription(
+		/^Delete its deployment first/,
+	);
 });

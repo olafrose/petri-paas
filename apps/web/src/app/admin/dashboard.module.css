@@ -13,6 +13,25 @@
 	margin: 0;
 }
 
+.titleActions {
+	display: flex;
+	flex-wrap: wrap;
+	gap: var(--space-2);
+}
+
+/* Experiment number above the handwritten name. */
+.entryTitle {
+	display: flex;
+	flex-direction: column;
+	align-items: flex-start;
+	gap: var(--space-1);
+}
+
+.lead {
+	margin: 0 0 var(--space-4);
+	max-width: 40rem;
+}
+
 .soft {
 	color: var(--ink-soft);
 	font-size: 0.875rem;
@@ -52,6 +71,16 @@
 
 .entryHead h2 {
 	margin: 0;
+}
+
+.entryLink {
+	color: inherit;
+	text-decoration: none;
+}
+
+.entryLink:hover {
+	text-decoration: underline;
+	text-decoration-color: var(--accent);
 }
 
 .entryMeta {
@@ -131,6 +160,16 @@
 
 .section h2 {
 	margin: 0 0 var(--space-3);
+}
+
+.deleted {
+	margin-top: var(--space-3);
+	color: var(--ink-soft);
+	font-size: 0.875rem;
+}
+
+.deleted summary {
+	cursor: pointer;
 }
 
 .error {
@@ -225,6 +264,13 @@ fieldset.group {
 	display: flex;
 	flex-direction: column;
 	gap: var(--space-2);
+}
+
+textarea.mono {
+	font-family: var(--font-mono);
+	font-size: 0.85rem;
+	line-height: 1.5;
+	resize: vertical;
 }
 
 .radio {

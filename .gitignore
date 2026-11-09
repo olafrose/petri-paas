@@ -18,3 +18,4 @@ apps/web/next-env.d.ts
 # Playwright output (e2e/)
 e2e/report/
 e2e/results/
+e2e/.auth/

@@ -25,6 +25,7 @@ type ProjectRow = typeof projects.$inferSelect;
 function toProject(row: ProjectRow): Project {
 	return {
 		id: row.id,
+		number: row.number,
 		name: row.name,
 		slug: row.slug,
 		description: row.description,
@@ -67,6 +68,20 @@ export const projectRoutes: FastifyPluginAsyncZod<{ db: Database }> = async (
 				]);
 			}
 
+			const conflict = () =>
+				new ApiError(
+					409,
+					"conflict",
+					`A project with slug "${slug}" already exists`,
+				);
+			// Checked first: a failed insert would still use up an experiment
+			// number. The unique constraint catches a concurrent request.
+			const [taken] = await db
+				.select({ id: projects.id })
+				.from(projects)
+				.where(eq(projects.slug, slug));
+			if (taken) throw conflict();
+
 			try {
 				const [row] = await db
 					.insert(projects)
@@ -79,11 +94,7 @@ export const projectRoutes: FastifyPluginAsyncZod<{ db: Database }> = async (
 					.send(toProject(row));
 			} catch (error) {
 				if (isConstraintViolation(error, "projects_slug_unique")) {
-					throw new ApiError(
-						409,
-						"conflict",
-						`A project with slug "${slug}" already exists`,
-					);
+					throw conflict();
 				}
 				throw error;
 			}
@@ -104,7 +115,7 @@ export const projectRoutes: FastifyPluginAsyncZod<{ db: Database }> = async (
 			const rows = await db
 				.select()
 				.from(projects)
-				.orderBy(desc(projects.createdAt), desc(projects.id));
+				.orderBy(desc(projects.number));
 			return { items: rows.map(toProject) };
 		},
 	);

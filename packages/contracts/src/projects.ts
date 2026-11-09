@@ -6,6 +6,9 @@ export const visibility = z.enum(["public", "private"]);
 export const project = z
 	.object({
 		id: z.uuid(),
+		number: z.int().positive().meta({
+			description: "Experiment number (EXP-007): sequential, never changes",
+		}),
 		name: z.string(),
 		slug: dnsLabel,
 		description: z.string(),
@@ -22,7 +25,7 @@ export const project = z
 
 export type Project = z.infer<typeof project>;
 
-const name = z.string().trim().min(1).max(100);
+const name = z.string().trim().min(1, "Give it a name").max(100);
 const description = z.string().max(500);
 const notes = z.string().max(50_000);
 

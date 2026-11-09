@@ -4,15 +4,16 @@ import { AutoRefresh } from "../../components/auto-refresh.tsx";
 import {
 	ButtonLink,
 	DateStamp,
+	ExperimentNumber,
 	Hand,
 	Label,
 	Sketch,
-	StatusStamp,
 } from "../../components/notebook/index.tsx";
 import { apiGet } from "../../lib/api.ts";
-import { isActive, sourceLabel } from "../../lib/deployments.ts";
+import { isActive } from "../../lib/deployments.ts";
 import { requestCookie } from "../../lib/session.ts";
 import styles from "./dashboard.module.css";
+import { DeploymentList, lastChange } from "./deployment-list.tsx";
 
 export const metadata: Metadata = { title: "Lab notebook" };
 
@@ -38,7 +39,12 @@ export default async function ExperimentsPage() {
 			<AutoRefresh active={anyActive} />
 			<div className={styles.titleRow}>
 				<Hand as="h1">Experiments</Hand>
-				<ButtonLink href="/admin/deploy">New deployment</ButtonLink>
+				<span className={styles.titleActions}>
+					<ButtonLink variant="secondary" href="/admin/projects/new">
+						New experiment
+					</ButtonLink>
+					<ButtonLink href="/admin/deploy">New deployment</ButtonLink>
+				</span>
 			</div>
 
 			{projects.length === 0 ? (
@@ -58,10 +64,20 @@ export default async function ExperimentsPage() {
 						return (
 							<li key={project.id} className={styles.entry}>
 								<div className={styles.entryHead}>
-									<Hand as="h2">{project.name}</Hand>
+									<span className={styles.entryTitle}>
+										<ExperimentNumber number={project.number} />
+										<Hand as="h2">
+											<a
+												className={styles.entryLink}
+												href={`/admin/projects/${project.id}`}
+											>
+												{project.name}
+											</a>
+										</Hand>
+									</span>
 									<span className={styles.entryMeta}>
 										{project.visibility === "private" && <Label>private</Label>}
-										<DateStamp date={project.updatedAt} />
+										<DateStamp date={lastChange(project, all)} />
 									</span>
 								</div>
 								{project.description && (
@@ -70,32 +86,7 @@ export default async function ExperimentsPage() {
 								{shown.length === 0 ? (
 									<p className={styles.soft}>No running deployments.</p>
 								) : (
-									<ul className={styles.deployments}>
-										{shown.map((deployment) => (
-											<li key={deployment.id} className={styles.deployment}>
-												<StatusStamp status={deployment.status} />
-												<a
-													className={styles.deploymentName}
-													href={`/admin/deployments/${deployment.id}`}
-												>
-													{deployment.name}
-												</a>
-												<span className={styles.source}>
-													{sourceLabel(deployment)}
-												</span>
-												{deployment.status === "ready" && (
-													<a
-														className={styles.open}
-														href={deployment.url}
-														target="_blank"
-														rel="noopener"
-													>
-														Open ↗
-													</a>
-												)}
-											</li>
-										))}
-									</ul>
+									<DeploymentList deployments={shown} />
 								)}
 								{deleted > 0 && (
 									<p className={styles.soft}>

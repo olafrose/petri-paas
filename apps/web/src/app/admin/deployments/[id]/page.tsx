@@ -3,6 +3,7 @@ import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import {
 	DateStamp,
+	experimentLabel,
 	Hand,
 	Label,
 	StatusStamp,
@@ -48,7 +49,10 @@ export default async function DeploymentPage({
 	return (
 		<>
 			<p className={styles.soft}>
-				<a href="/admin">Experiments</a> / {owner.name}
+				<a href="/admin">Experiments</a> /{" "}
+				<a href={`/admin/projects/${owner.id}`}>
+					{experimentLabel(owner.number)} {owner.name}
+				</a>
 			</p>
 			<div className={styles.titleRow}>
 				<Hand as="h1">{current.name}</Hand>

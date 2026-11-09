@@ -83,9 +83,14 @@ describe("POST /deployments", () => {
 	test("creates the project if needed and reuses it afterwards", async () => {
 		await create(minimal);
 		await create({ ...minimal, source: { ...minimal.source, ref: "dev" } });
+		// Reusing the project doesn't use up experiment numbers.
+		await create({ ...minimal, project: "other" });
 		const projects = await ctx.inject({ url: "/api/v1/projects" });
-		expect(projects.json<ProjectList>().items.map((p) => p.slug)).toEqual([
-			"demo",
+		expect(
+			projects.json<ProjectList>().items.map((p) => [p.number, p.slug]),
+		).toEqual([
+			[2, "other"],
+			[1, "demo"],
 		]);
 	});
 
