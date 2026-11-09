@@ -53,6 +53,7 @@ export function useTestApp() {
 			jobs,
 			events,
 			logsDir,
+			runtimeLogsTimeoutMs: 3000,
 			uploads: { uploadsDir, maxUploadBytes: 1024 * 1024 },
 			publicUrl,
 			previewBaseUrl,

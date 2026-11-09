@@ -172,6 +172,19 @@
 	cursor: pointer;
 }
 
+.logBar {
+	display: flex;
+	flex-wrap: wrap;
+	justify-content: space-between;
+	align-items: center;
+	gap: var(--space-2);
+	margin-bottom: var(--space-2);
+}
+
+.logBar .soft {
+	margin: 0;
+}
+
 .error {
 	color: var(--danger);
 	margin: 0;

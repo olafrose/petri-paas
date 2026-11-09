@@ -1,12 +1,22 @@
-import { appendFileSync, writeFileSync } from "node:fs";
-import { join } from "node:path";
-import type { Deployment, DeploymentEvent } from "@petri/contracts";
+import { appendFileSync, mkdirSync, writeFileSync } from "node:fs";
+import { dirname, join } from "node:path";
+import type {
+	Deployment,
+	DeploymentEvent,
+	ErrorResponse,
+} from "@petri/contracts";
 import {
 	builds,
 	type DeploymentStatus,
 	deploymentEvents,
+	publishEvent,
 } from "@petri/database";
 import { updateStatus } from "@petri/deployment-core";
+import {
+	RUNTIME_LOGS_READY,
+	type RuntimeLogsResult,
+	runtimeLogsPath,
+} from "@petri/jobs";
 import { asc, eq } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, test, vi } from "vitest";
 import { useTestApp } from "../../test/app.ts";
@@ -266,5 +276,124 @@ describe("GET /deployments/:id/logs", () => {
 			url: `/api/v1/deployments/${mine.id}/logs?build=${await buildOf(other.id)}`,
 		});
 		expect(response.statusCode).toBe(404);
+	});
+});
+
+describe("GET /deployments/:id/logs?source=runtime", () => {
+	/** What the fake worker does with the next request. */
+	let answer: "yes" | "no container" | "without event" | "never" = "yes";
+	const requested: { deploymentId: string; lines: number }[] = [];
+
+	beforeAll(async () => {
+		// Stands in for the worker: answers as deployment-logs.ts does.
+		await ctx.jobs.work(
+			"deployment.logs",
+			async ({ data }) => {
+				requested.push({ deploymentId: data.deploymentId, lines: data.lines });
+				if (answer === "never") return;
+				const result: RuntimeLogsResult = {
+					deploymentId: data.deploymentId,
+					container:
+						answer === "no container"
+							? null
+							: { status: "running", running: true },
+					text: answer === "no container" ? "" : "2026-11-09T21:04:05Z hello\n",
+					truncated: false,
+					writtenAt: new Date().toISOString(),
+				};
+				const path = runtimeLogsPath(ctx.logsDir, data.requestId);
+				mkdirSync(dirname(path), { recursive: true });
+				writeFileSync(path, JSON.stringify(result));
+				if (answer !== "without event") {
+					await publishEvent(ctx.db, {
+						type: RUNTIME_LOGS_READY,
+						requestId: data.requestId,
+					});
+				}
+			},
+			{ pollingIntervalSeconds: 0.5 },
+		);
+	});
+
+	async function readyDeployment() {
+		const deployment = await createDeployment(`app-${requested.length}`);
+		const steps: DeploymentStatus[] = [
+			"cloning",
+			"building",
+			"deploying",
+			"health_check",
+			"ready",
+		];
+		for (const status of steps) {
+			await updateStatus(ctx.db, deployment.id, status, { message: status });
+		}
+		return deployment;
+	}
+
+	const runtimeLogs = (id: string, query = "") =>
+		ctx.inject({
+			url: `/api/v1/deployments/${id}/logs?source=runtime${query}`,
+		});
+
+	test("returns the app's output from the worker", async () => {
+		answer = "yes";
+		const deployment = await readyDeployment();
+		const response = await runtimeLogs(deployment.id, "&lines=50");
+		expect(response.statusCode).toBe(200);
+		expect(response.body).toBe("2026-11-09T21:04:05Z hello\n");
+		expect(response.headers["content-type"]).toContain("text/plain");
+		expect(response.headers["x-container-status"]).toBe("running");
+		expect(requested.at(-1)).toEqual({
+			deploymentId: deployment.id,
+			lines: 50,
+		});
+	});
+
+	test("finds the answer even if its event got lost", async () => {
+		answer = "without event";
+		const deployment = await readyDeployment();
+		const response = await runtimeLogs(deployment.id);
+		expect(response.statusCode).toBe(200);
+		expect(response.body).toContain("hello");
+	});
+
+	test("says clearly when there is no container", async () => {
+		answer = "no container";
+		const deployment = await readyDeployment();
+		const response = await runtimeLogs(deployment.id);
+		expect(response.statusCode).toBe(409);
+		expect(response.json<ErrorResponse>().error.code).toBe("no_container");
+	});
+
+	test("doesn't ask the worker when there can't be a container", async () => {
+		const deployment = await createDeployment("queued-app");
+		const before = requested.length;
+		const response = await runtimeLogs(deployment.id);
+		expect(response.statusCode).toBe(409);
+		expect(response.json<ErrorResponse>().error).toMatchObject({
+			code: "no_container",
+			message: "The app hasn't been built yet.",
+		});
+		expect(requested).toHaveLength(before);
+	});
+
+	test("answers 503 when the worker doesn't answer", async () => {
+		answer = "never";
+		const deployment = await readyDeployment();
+		const response = await runtimeLogs(deployment.id);
+		expect(response.statusCode).toBe(503);
+		expect(response.json<ErrorResponse>().error.code).toBe(
+			"worker_unavailable",
+		);
+	});
+
+	test("needs deploy:read, and limits the lines", async () => {
+		const deployment = await readyDeployment();
+		const anonymous = await ctx.anonymous({
+			url: `/api/v1/deployments/${deployment.id}/logs?source=runtime`,
+		});
+		expect(anonymous.statusCode).toBe(401);
+		const tooMany = await runtimeLogs(deployment.id, "&lines=5000");
+		expect(tooMany.statusCode).toBe(400);
 	});
 });

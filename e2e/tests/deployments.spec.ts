@@ -30,7 +30,18 @@ test("deploy a ZIP, open it, stop, start and delete it", async ({
 	await expect(page).toHaveURL(/\/admin\/deployments\/[0-9a-f-]+$/);
 	await expect(statusStamp(page)).toHaveText("ready", { timeout: 90_000 });
 	await expect(page.getByText(/^Ready at http/)).toBeVisible();
-	await expect(page.locator("pre")).toContainText("[petri] Building image");
+	await expect(page.locator("pre").last()).toContainText(
+		"[petri] Building image",
+	);
+
+	// The app's own output, fetched through the worker.
+	const output = page.locator("section", { hasText: "App output" });
+	await expect(output.locator("pre")).toContainText(
+		/\d\d:\d\d:\d\dZ hello app started/,
+	);
+	await expect(output.getByText(/app running/)).toBeVisible();
+	await output.getByRole("button", { name: "Refresh" }).click();
+	await expect(output.locator("pre")).toContainText("hello app started");
 
 	// The preview answers through the edge proxy.
 	const url = await page.locator("dd a[target=_blank]").getAttribute("href");
@@ -67,6 +78,13 @@ test("deploy a ZIP, open it, stop, start and delete it", async ({
 
 	await page.getByRole("button", { name: "Stop" }).click();
 	await expect(statusStamp(page)).toHaveText("stopped", { timeout: 30_000 });
+	// The status changes when stopping is asked for; the app itself stops
+	// a moment later. The output is a snapshot: refresh until it shows.
+	await expect(async () => {
+		await output.getByRole("button", { name: "Refresh" }).click();
+		await expect(output.getByText(/app exited/)).toBeVisible({ timeout: 2000 });
+	}).toPass({ timeout: 20_000 });
+	await expect(output.locator("pre")).toContainText("hello app started");
 
 	await page.getByRole("button", { name: "Start" }).click();
 	await expect(statusStamp(page)).toHaveText("ready", { timeout: 60_000 });
@@ -75,6 +93,9 @@ test("deploy a ZIP, open it, stop, start and delete it", async ({
 	await page.getByRole("button", { name: "Delete" }).click();
 	await expect(statusStamp(page)).toHaveText("deleted", { timeout: 60_000 });
 	await expect(page.getByRole("button", { name: "Start" })).toHaveCount(0);
+	await expect(
+		output.getByText("The app was removed with the deployment."),
+	).toBeVisible();
 
 	// With its deployment gone, the experiment can be deleted too.
 	await page
