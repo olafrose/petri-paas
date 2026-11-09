@@ -212,11 +212,48 @@ config limits `client_max_body_size`, allow at least that for
 
 ## 8. Try it from outside
 
-From a device outside the homelab (e.g. a phone on mobile data):
+From a device outside the homelab (e.g. a phone on mobile data), open
+`https://petri.example.com/admin` and sign in.
 
-1. Open `https://petri.example.com/admin` and sign in.
-2. Create an API key (`POST /api/v1/api-keys`, or the API docs at
-   `/api/v1/docs`), deploy a small app, and open the `url` it reports.
+Then deploy a small app. Until the dashboard can (phase 4), through the
+API, from any Linux machine. `PETRI` must match `PUBLIC_URL` exactly,
+`https://` included: sign-ins from any other origin are refused
+(`INVALID_ORIGIN`).
+
+```bash
+PETRI=https://petri.example.com
+read -rp "Email: " EMAIL; read -rsp "Password: " PASS; echo
+J='content-type: application/json'; O="origin: $PETRI"
+
+# Sign in, and create an API key (shown only now; kept in $KEY)
+curl -s -c /tmp/petri-jar -H "$J" -H "$O" \
+  -d "{\"email\":\"$EMAIL\",\"password\":\"$PASS\"}" \
+  $PETRI/api/v1/auth/sign-in/email >/dev/null
+KEY=$(curl -s -b /tmp/petri-jar -H "$J" -H "$O" \
+  -d '{"name":"first test","scopes":["deploy:read","deploy:create","deploy:update","deploy:delete"]}' \
+  $PETRI/api/v1/api-keys | sed -n 's/.*"key":"\([^"]*\)".*/\1/p')
+rm -f /tmp/petri-jar; unset PASS
+echo "API key: ${KEY:0:12}…"
+
+# A one-file app, uploaded as a ZIP
+mkdir -p /tmp/hello/site && cd /tmp/hello
+printf 'FROM busybox:1.37\nRUN mkdir /www && echo "<h1>Hello from petri.</h1>" > /www/index.html\nEXPOSE 8080\nCMD ["httpd","-f","-p","8080","-h","/www"]\n' > site/Dockerfile
+python3 -c "import zipfile; z=zipfile.ZipFile('hello.zip','w'); z.write('site/Dockerfile'); z.close()"
+R=$(curl -s -H "authorization: Bearer $KEY" -F archive=@hello.zip \
+  -F 'settings={"project":"hello","name":"first"}' $PETRI/api/v1/deployments/upload)
+ID=$(echo "$R" | sed -n 's/.*"id":"\([^"]*\)".*/\1/p'); echo "$R" | grep -o '"url":"[^"]*"'
+
+# Follow it until ready (or failed)
+for i in $(seq 60); do
+  S=$(curl -s -H "authorization: Bearer $KEY" $PETRI/api/v1/deployments/$ID | grep -o '"status":"[^"]*"' | head -1)
+  echo "$S"; case $S in *ready*|*failed*) break;; esac; sleep 3
+done
+```
+
+Open the printed `url` from outside: it shows "Hello from petri.". If
+the status ends in `failed`, `$PETRI/api/v1/deployments/$ID/events`
+says which step failed and why. Delete the test app with
+`curl -X DELETE -H "authorization: Bearer $KEY" $PETRI/api/v1/deployments/$ID`.
 
 ------------------------------------------------------------------------
 

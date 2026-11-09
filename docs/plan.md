@@ -415,6 +415,10 @@ production host.
 
 **Result:** a preview is reachable from outside the homelab.
 
+**Done** (9 November 2026): installed on the Proxmox VM following
+`docs/operations.md`, the probe passes there, and a test app was opened
+from a phone on mobile data.
+
 ## Phase 4 --- Dashboard and gallery (outline)
 
 -   Admin dashboard: projects, deployments, logs, actions, API keys.
