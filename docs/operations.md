@@ -26,18 +26,68 @@ internet but nothing on the LAN. Both are enforced by the host firewall
 
 ------------------------------------------------------------------------
 
+## 0. Choose the VM
+
+  Resource   Recommendation                       Why
+  ---------- ------------------------------------ ------------------------------------------
+  CPU        4 vCPU, type `x86-64-v3` (or `host`)  Two builds at a time; each app up to 1 core
+  RAM        8 GB (6 GB minimum)                   Each app up to 512 MB; the stack itself
+                                                   needs about 1.5--2 GB, builds more
+  Disk       100 GB, SSD, thin-provisioned         BuildKit cache (up to 20 GB), one image per
+                                                   preview, uploads, logs, database
+
+8 GB runs about 8--10 previews at once. In Proxmox:
+
+-   **Memory ballooning off.** petri. relies on the memory limits Docker
+    enforces; memory taken away underneath the VM brings in the kernel's
+    out-of-memory killer, which ends whatever it picks.
+-   Disk: VirtIO SCSI single, **Discard** and **IO thread** on, so space
+    freed by removed images goes back to the storage.
+-   Network: VirtIO. QEMU guest agent enabled (installed in step 1), for
+    consistent snapshot backups.
+-   Start at boot; scheduled backups (vzdump, snapshot mode). Keep the
+    `pg_dump` under *Day to day* as well: a dump is easier to restore than
+    a whole VM.
+
+Network placement:
+
+-   A fixed LAN address (DHCP reservation or static).
+-   **Ideally its own VLAN (a DMZ)**, with router rules that let only NPM
+    reach ports 3000 and 8080. The host firewall already keeps apps off the
+    LAN; this is a second layer, and limits what's within reach if a
+    container ever escaped Docker. In the same LAN as everything else, the
+    firewall's `--npm` and `--ssh-from` (step 3) are the protection.
+-   IPv6 for Docker stays off (Docker's default); the host access rules
+    expect IPv4 for the published ports.
+
+Keep this VM to petri. alone: it runs code from repositories, and the
+worker controls Docker. NPM, other services and their secrets belong
+elsewhere. It also can't double as a development machine: both stacks
+create the `pb-build` network.
+
 ## 1. Prepare the VM
 
-An x86-64-v3 VM (Debian 13 or Ubuntu 24.04), with Docker Engine and its
-Compose plugin installed from Docker's own repository
-(<https://docs.docker.com/engine/install/>), plus:
+Debian 13 (as tested; Ubuntu 24.04 should work too: both use cgroup v2,
+which enforces the apps' memory limits, and nftables). Install Docker
+Engine and its Compose plugin from Docker's own repository
+(<https://docs.docker.com/engine/install/>), then:
 
 ```bash
-sudo apt install git nftables
+sudo apt install git nftables qemu-guest-agent unattended-upgrades
 sudo usermod -aG docker "$USER"    # log in again afterwards
 ```
 
-Give the VM a fixed LAN address (DHCP reservation or static).
+Cap the logs of petri.'s own containers (apps already have a limit;
+Docker's default keeps everything):
+
+```bash
+echo '{"log-driver": "json-file", "log-opts": {"max-size": "10m", "max-file": "3"}}' \
+  | sudo tee /etc/docker/daemon.json
+sudo systemctl restart docker
+```
+
+Give the host itself 1--2 GB of swap (or zram) if the image has none;
+apps can't use it, petri. prevents that.
 
 ## 2. Get petri. and configure it
 
