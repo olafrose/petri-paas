@@ -48,6 +48,10 @@ COPY --from=build /out/api ./
 RUN mkdir -p /var/lib/petri/uploads && chown node:node /var/lib/petri/uploads
 USER node
 EXPOSE 4000
+# The commit, shown in the settings. Set by CI; last, so it doesn't
+# invalidate the layers above.
+ARG PETRI_COMMIT=""
+ENV PETRI_COMMIT=${PETRI_COMMIT}
 CMD ["node", "dist/main.js"]
 
 # The worker fetches sources with git and drives BuildKit with buildctl

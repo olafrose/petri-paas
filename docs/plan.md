@@ -565,6 +565,14 @@ live.
 **Done when:** keys can be managed without curl, and a revoked key
 stops working (end-to-end test).
 
+**Decided:** the settings come from a new `GET /settings` (scope
+`deploy:read`, so coding assistants can check limits before deploying).
+The limits are the constants the build engine and runtime enforce,
+exported from those packages, so the page can't drift from what is
+enforced. The version is the commit, passed into the API image by CI
+(`PETRI_COMMIT`); local builds show "development build". New keys get
+read, create and update by default; delete is opt-in.
+
 ### 4.7 Preview images
 
 -   `PUT /projects/:id/image` (owner and `deploy:update`): PNG, JPEG or

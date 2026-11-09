@@ -21,6 +21,7 @@
 		"@petri/database": "workspace:*",
 		"@petri/deployment-core": "workspace:*",
 		"@petri/jobs": "workspace:*",
+		"@petri/runtime": "workspace:*",
 		"better-auth": "^1.7.18",
 		"drizzle-orm": "0.45.4",
 		"fastify": "^5.12.8",

@@ -16,6 +16,9 @@ export interface HealthCheckOptions {
 	signal?: AbortSignal;
 }
 
+/** How long an app may take to answer for the first time. */
+export const DEFAULT_HEALTH_TIMEOUT_MS = 60_000;
+
 export type HealthCheckResult =
 	| { healthy: true; status: number; attempts: number }
 	| { healthy: false; reason: string; attempts: number };
@@ -28,7 +31,7 @@ export type HealthCheckResult =
 export async function waitForHealthy(
 	options: HealthCheckOptions,
 ): Promise<HealthCheckResult> {
-	const timeoutMs = options.timeoutMs ?? 60_000;
+	const timeoutMs = options.timeoutMs ?? DEFAULT_HEALTH_TIMEOUT_MS;
 	const intervalMs = options.intervalMs ?? 2000;
 	const deadline = Date.now() + timeoutMs;
 	let attempts = 0;

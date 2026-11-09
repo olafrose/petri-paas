@@ -20,6 +20,7 @@ export {
 	type ResourceLimits,
 } from "./docker-runtime.ts";
 export {
+	DEFAULT_HEALTH_TIMEOUT_MS,
 	type HealthCheckOptions,
 	type HealthCheckResult,
 	waitForHealthy,

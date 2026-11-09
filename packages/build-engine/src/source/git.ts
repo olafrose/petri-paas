@@ -36,8 +36,11 @@ export interface GitFetchResult {
 	commit: string;
 }
 
-const DEFAULT_TIMEOUT_MS = 2 * 60 * 1000;
-const DEFAULT_MAX_BYTES = 500 * 1024 * 1024;
+/** How long a fetch may take, and how large the repository may get. */
+export const DEFAULT_GIT_LIMITS = {
+	timeoutMs: 2 * 60 * 1000,
+	maxBytes: 500 * 1024 * 1024,
+};
 const SIZE_CHECK_INTERVAL_MS = 500;
 
 const defaultLookup: LookupFn = async (hostname) =>
@@ -101,11 +104,13 @@ export async function fetchGitSource(
 		...(options.extraConfig ?? []),
 	].flatMap((entry) => ["-c", entry]);
 
-	const timeout = AbortSignal.timeout(options.timeoutMs ?? DEFAULT_TIMEOUT_MS);
+	const timeout = AbortSignal.timeout(
+		options.timeoutMs ?? DEFAULT_GIT_LIMITS.timeoutMs,
+	);
 	const signal = options.signal
 		? AbortSignal.any([options.signal, timeout])
 		: timeout;
-	const maxBytes = options.maxBytes ?? DEFAULT_MAX_BYTES;
+	const maxBytes = options.maxBytes ?? DEFAULT_GIT_LIMITS.maxBytes;
 	const run = (args: string[], watchSize = false) =>
 		runGit(args, {
 			cwd: options.destination,

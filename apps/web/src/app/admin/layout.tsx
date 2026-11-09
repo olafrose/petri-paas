@@ -21,6 +21,8 @@ export default async function AdminLayout({
 				<nav className={styles.nav} aria-label="Admin">
 					<a href="/admin">Experiments</a>
 					<a href="/admin/deploy">New deployment</a>
+					<a href="/admin/api-keys">API keys</a>
+					<a href="/admin/settings">Settings</a>
 				</nav>
 				<span className={styles.user}>
 					{session.user.email}

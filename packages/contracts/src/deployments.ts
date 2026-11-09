@@ -72,12 +72,20 @@ export const buildSettings = z
 	})
 	.strict();
 
+/** Lifetime of a temporary deployment, in hours. */
+export const TTL_HOURS = { default: 48, max: 720 } as const;
+
 export const lifecycleSettings = z
 	.discriminatedUnion("mode", [
 		z
 			.object({
 				mode: z.literal("temporary"),
-				ttlHours: z.number().int().min(1).max(720).default(48),
+				ttlHours: z
+					.number()
+					.int()
+					.min(1)
+					.max(TTL_HOURS.max)
+					.default(TTL_HOURS.default),
 			})
 			.strict(),
 		z.object({ mode: z.literal("permanent") }).strict(),
@@ -101,7 +109,10 @@ export const createDeploymentBody = z
 			.meta({ description: "Preview subdomain. Generated if omitted." }),
 		source: gitSource,
 		build: buildSettings.default({ strategy: "auto", args: {} }),
-		lifecycle: lifecycleSettings.default({ mode: "temporary", ttlHours: 48 }),
+		lifecycle: lifecycleSettings.default({
+			mode: "temporary",
+			ttlHours: TTL_HOURS.default,
+		}),
 	})
 	.strict()
 	.meta({ id: "CreateDeployment" });
