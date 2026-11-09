@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import type { ReactNode } from "react";
-import { fontVariables } from "./fonts.ts";
+import { caveat } from "./fonts.ts";
 import "./globals.css";
 import styles from "./layout.module.css";
 
@@ -11,7 +11,7 @@ export const metadata: Metadata = {
 
 export default function RootLayout({ children }: { children: ReactNode }) {
 	return (
-		<html lang="en" className={fontVariables}>
+		<html lang="en" className={caveat.variable}>
 			<body>
 				<header className={styles.header}>
 					<a href="/" className={styles.wordmark}>

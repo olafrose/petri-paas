@@ -18,54 +18,9 @@ import styles from "./styleguide.module.css";
 export const metadata: Metadata = { title: "Style guide" };
 
 /*
- * The lab-notebook design proposal (task 4.1). The owner compares the
- * options here and picks; the choice is in the URL, so it can be shared.
+ * The lab notebook's building blocks in one place (task 4.1): a reference
+ * for building screens, and a quick check after changing the theme.
  */
-
-const OPTIONS = {
-	hand: [
-		["caveat", "Caveat"],
-		["kalam", "Kalam"],
-		["patrick", "Patrick Hand"],
-	],
-	body: [
-		["system", "System font"],
-		["plex", "IBM Plex"],
-	],
-	look: [
-		["light", "Headings and stamps"],
-		["full", "Ruled paper too"],
-	],
-	theme: [
-		["paper", "Paper"],
-		["night", "Night lab"],
-	],
-} as const;
-
-type Choice = { [Key in keyof typeof OPTIONS]: string };
-
-const QUESTIONS: Record<keyof typeof OPTIONS, string> = {
-	hand: "Handwritten font",
-	body: "Body font",
-	look: "How much notebook",
-	theme: "Variant",
-};
-
-function choose(params: Record<string, string | undefined>): Choice {
-	const pick = (key: keyof typeof OPTIONS) => {
-		const values = OPTIONS[key].map(([value]) => value as string);
-		const wanted = params[key];
-		return wanted && values.includes(wanted) ? wanted : (values[0] as string);
-	};
-	return {
-		hand: pick("hand"),
-		body: pick("body"),
-		look: pick("look"),
-		theme: pick("theme"),
-	};
-}
-
-const href = (choice: Choice) => `?${new URLSearchParams(choice)}`;
 
 const SAMPLE_LOG = `[petri] Fetching source
 [petri] Fetched main at 3f9c2a1e
@@ -88,47 +43,16 @@ const STATUSES: DeploymentStatus[] = [
 	"deleted",
 ];
 
-export default async function StyleGuidePage({
-	searchParams,
-}: {
-	searchParams: Promise<Record<string, string | undefined>>;
-}) {
-	const choice = choose(await searchParams);
-
+export default function StyleGuidePage() {
 	return (
-		<div
-			className={styles.page}
-			data-hand={choice.hand}
-			data-body={choice.body}
-			data-look={choice.look}
-			data-theme={choice.theme}
-		>
+		<div>
 			<header className={styles.intro}>
 				<Hand as="h1">Style guide</Hand>
 				<p>
-					The lab notebook's look, for choosing. Pick an option in each row; the
-					page updates. Send the address of the page you like: it contains your
-					choice.
+					The lab notebook's building blocks. Screens are made from these;
+					change the theme in <code>globals.css</code> and check here.
 				</p>
 			</header>
-
-			<nav className={styles.choices} aria-label="Design options">
-				{(Object.keys(OPTIONS) as (keyof typeof OPTIONS)[]).map((key) => (
-					<div key={key} className={styles.choiceRow}>
-						<span className={styles.question}>{QUESTIONS[key]}</span>
-						{OPTIONS[key].map(([value, text]) => (
-							<a
-								key={value}
-								href={href({ ...choice, [key]: value })}
-								className={styles.option}
-								aria-current={choice[key] === value ? "true" : undefined}
-							>
-								{text}
-							</a>
-						))}
-					</div>
-				))}
-			</nav>
 
 			<section className={styles.section}>
 				<Hand as="h2">An entry in the notebook</Hand>

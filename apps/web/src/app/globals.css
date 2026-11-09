@@ -1,12 +1,7 @@
 /*
- * Lab-notebook theme tokens. The options under comparison in the style
- * guide (task 4.1) are attributes on an element:
- *   data-hand="caveat|kalam|patrick"   handwritten accent font
- *   data-body="system|plex"            body and monospace fonts
- *   data-look="light|full"             how much notebook: headings and
- *                                      stamps only, or ruled paper too
- *   data-theme="paper|night"           light paper or a dark variant
- * Defaults (no attributes) are the current look.
+ * Lab-notebook theme (task 4.1, chosen by the owner): Caveat for
+ * handwritten accents, the system font for everything else, ruled paper
+ * with a margin line. A night variant comes later, with a look of its own.
  */
 :root {
 	--paper: #f6f0e2;
@@ -25,9 +20,9 @@
 
 	--font-body:
 		ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
-	--font-hand: var(--font-caveat, "Segoe Print", "Bradley Hand", cursive);
+	--font-hand: var(--font-caveat), "Segoe Print", "Bradley Hand", cursive;
 	--font-mono: ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
-	/* Caveat runs small; other hands are scaled to match it. */
+	/* For swapping in a handwriting that runs larger or smaller. */
 	--hand-scale: 1;
 
 	--space-1: 0.25rem;
@@ -39,41 +34,18 @@
 	--content-width: 60rem;
 }
 
-[data-hand="kalam"] {
-	--font-hand: var(--font-kalam), cursive;
-	--hand-scale: 0.8;
+* {
+	box-sizing: border-box;
 }
 
-[data-hand="patrick"] {
-	--font-hand: var(--font-patrick-hand), cursive;
-	--hand-scale: 0.9;
-}
-
-[data-body="plex"] {
-	--font-body: var(--font-plex-sans), ui-sans-serif, system-ui, sans-serif;
-	--font-mono: var(--font-plex-mono), ui-monospace, monospace;
-}
-
-/* Night lab: dark blue-grey paper, chalk-white ink. Same contrast rules. */
-[data-theme="night"] {
-	color-scheme: dark;
-	--paper: #1d2230;
-	--paper-raised: #252b3b;
-	--paper-line: #3a4258;
-	--paper-rule: #2c3346;
-	--paper-margin: #5c3a44;
-	--ink: #ece6d6;
-	--ink-soft: #b4afc2;
-	--accent: #f0a08f;
-	--ok: #9fd18f;
-	--busy: #f2c46d;
-	--danger: #ff9a8f;
-	--muted: #a19db0;
-	--log-bg: #11141c;
-}
-
-/* Full notebook: ruled lines and a red margin line behind the page. */
-[data-look="full"] {
+/*
+ * Ruled paper with a red margin line, behind every page. On the root
+ * element, at least as tall as the window: one continuous sheet, however
+ * short or long the page.
+ */
+html {
+	color-scheme: light;
+	min-height: 100%;
 	background-color: var(--paper);
 	background-image:
 		linear-gradient(
@@ -92,17 +64,8 @@
 		);
 }
 
-* {
-	box-sizing: border-box;
-}
-
-html {
-	color-scheme: light;
-}
-
 body {
 	margin: 0;
-	background: var(--paper);
 	color: var(--ink);
 	font-family: var(--font-body);
 	line-height: 1.5;
