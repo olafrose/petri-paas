@@ -19,6 +19,8 @@ export type DeploymentStatus = z.infer<typeof deploymentStatus>;
 
 export const deploymentAction = z.enum(["stop", "start", "redeploy", "delete"]);
 
+export type DeploymentAction = z.infer<typeof deploymentAction>;
+
 export const lifecycleMode = z.enum(["temporary", "permanent"]);
 
 const directory = z
