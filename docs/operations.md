@@ -241,7 +241,9 @@ printf 'FROM busybox:1.37\nRUN mkdir /www && echo "<h1>Hello from petri.</h1>" >
 python3 -c "import zipfile; z=zipfile.ZipFile('hello.zip','w'); z.write('site/Dockerfile'); z.close()"
 R=$(curl -s -H "authorization: Bearer $KEY" -F archive=@hello.zip \
   -F 'settings={"project":"hello","name":"first"}' $PETRI/api/v1/deployments/upload)
-ID=$(echo "$R" | sed -n 's/.*"id":"\([^"]*\)".*/\1/p'); echo "$R" | grep -o '"url":"[^"]*"'
+# The deployment's id is the response's first field (the build inside
+# it has an "id" too).
+ID=$(echo "$R" | sed -n 's/^{"id":"\([^"]*\)".*/\1/p'); echo "$R" | grep -o '"url":"[^"]*"'
 
 # Follow it until ready (or failed)
 for i in $(seq 60); do
