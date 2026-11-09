@@ -456,6 +456,18 @@ style page):
     stamps everywhere, or only in headings and the gallery.
 -   A dark ("night lab") variant: now, later, or never.
 
+**Chosen** (owner, November 2026):
+
+-   Handwritten font: **Caveat**, for now. **Later:** look for an openly
+    licensed handwritten font with connected letters (a real cursive),
+    closer to the intended look, and swap it in (one font and the
+    `--font-hand` token).
+-   Body font: **the system font** (its numbers read better than IBM
+    Plex's).
+-   **Ruled paper** with a red margin line, behind every page.
+-   Night variant: **later**, probably with a look of its own rather
+    than the same design in dark colours.
+
 **Done when:** the owner has picked the options and the style page shows
 the result; the tokens and components are what 4.2--4.8 use.
 
