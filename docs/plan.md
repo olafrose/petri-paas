@@ -456,6 +456,13 @@ style page):
     stamps everywhere, or only in headings and the gallery.
 -   A dark ("night lab") variant: now, later, or never.
 
+**Chosen** (owner, November 2026):
+
+-   Handwritten font: **Caveat**, for now. **Later:** look for an openly
+    licensed handwritten font with connected letters (a real cursive),
+    closer to the intended look, and swap it in (one font and the
+    `--font-hand` token).
+
 **Done when:** the owner has picked the options and the style page shows
 the result; the tokens and components are what 4.2--4.8 use.
 
