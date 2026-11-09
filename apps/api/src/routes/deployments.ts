@@ -101,14 +101,21 @@ async function latestBuilds(db: Database, deploymentIds: string[]) {
 
 /** Finds the project by slug, creating it if needed. */
 async function ensureProject(tx: Transaction, slug: string) {
+	const find = () =>
+		tx
+			.select({ id: projects.id })
+			.from(projects)
+			.where(eq(projects.slug, slug))
+			.then(([row]) => row);
+	// Looked up first: an insert that hits the conflict would still use up
+	// an experiment number.
+	const existing = await find();
+	if (existing) return existing;
 	await tx
 		.insert(projects)
 		.values({ name: slug, slug })
 		.onConflictDoNothing({ target: projects.slug });
-	const [project] = await tx
-		.select({ id: projects.id })
-		.from(projects)
-		.where(eq(projects.slug, slug));
+	const project = await find();
 	if (!project) throw new Error(`project ${slug} vanished`);
 	return project;
 }

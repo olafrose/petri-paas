@@ -13,13 +13,13 @@ import styles from "./notebook.module.css";
  * JavaScript reaches the browser for any of them.
  */
 
+/** A project's number as text: EXP-007. */
+export const experimentLabel = (number: number) =>
+	`EXP-${String(number).padStart(3, "0")}`;
+
 /** A project's number, e.g. EXP-007. */
 export function ExperimentNumber({ number }: { number: number }) {
-	return (
-		<span className={styles.experiment}>
-			EXP-{String(number).padStart(3, "0")}
-		</span>
-	);
+	return <span className={styles.experiment}>{experimentLabel(number)}</span>;
 }
 
 /** A date as a stamp: 09 NOV 2026. */

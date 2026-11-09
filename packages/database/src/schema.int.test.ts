@@ -1,4 +1,4 @@
-import { asc, eq } from "drizzle-orm";
+import { asc, eq, sql } from "drizzle-orm";
 import { describe, expect, test } from "vitest";
 import { expectConstraintViolation, useTestDatabase } from "../test/helpers.ts";
 import { migrateDatabase } from "./client.ts";
@@ -67,6 +67,28 @@ describe("projects", () => {
 		const first = await createProject("first");
 		const second = await createProject("second");
 		expect(first.id < second.id).toBe(true);
+	});
+
+	test("are numbered in creation order, and numbers aren't reused", async () => {
+		const first = await createProject("first");
+		const second = await createProject("second");
+		expect([first.number, second.number]).toEqual([1, 2]);
+
+		await db.delete(projects).where(eq(projects.id, second.id));
+		const third = await createProject("third");
+		expect(third.number).toBe(3);
+	});
+
+	test("numbers can't be chosen or changed", async () => {
+		const project = await createProject();
+		await expect(
+			db.execute(
+				sql`insert into projects (number, name, slug) values (42, 'x', 'x')`,
+			),
+		).rejects.toThrow();
+		await expect(
+			db.execute(sql`update projects set number = 42 where id = ${project.id}`),
+		).rejects.toThrow();
 	});
 
 	test("updatedAt changes on update", async () => {

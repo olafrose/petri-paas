@@ -1,0 +1,90 @@
+/* Rendered Markdown notes: plain, readable text on the notebook page. */
+
+.notes {
+	overflow-wrap: anywhere;
+}
+
+.notes > :first-child {
+	margin-top: 0;
+}
+
+.notes > :last-child {
+	margin-bottom: 0;
+}
+
+.notes h1,
+.notes h2,
+.notes h3,
+.notes h4 {
+	font-size: 1.05rem;
+	font-weight: 650;
+	margin: var(--space-4) 0 var(--space-2);
+}
+
+.notes h1 {
+	font-size: 1.25rem;
+}
+
+.notes p,
+.notes ul,
+.notes ol,
+.notes pre,
+.notes blockquote,
+.notes table {
+	margin: 0 0 var(--space-3);
+}
+
+.notes ul,
+.notes ol {
+	padding-left: var(--space-4);
+}
+
+/* Task lists: the checkbox stands in for the bullet. */
+.notes li:has(> input[type="checkbox"]) {
+	list-style: none;
+	margin-left: calc(-1 * var(--space-4));
+}
+
+.notes code {
+	font-family: var(--font-mono);
+	font-size: 0.85em;
+	background: var(--paper-line);
+	border-radius: 3px;
+	padding: 0 0.25em;
+}
+
+.notes pre {
+	background: var(--paper-raised);
+	border: 1px solid var(--paper-line);
+	border-radius: var(--radius);
+	padding: var(--space-2) var(--space-3);
+	overflow: auto;
+}
+
+.notes pre code {
+	background: none;
+	padding: 0;
+}
+
+.notes blockquote {
+	border-left: 3px solid var(--paper-margin);
+	padding-left: var(--space-3);
+	color: var(--ink-soft);
+}
+
+.notes table {
+	border-collapse: collapse;
+	display: block;
+	overflow-x: auto;
+}
+
+.notes th,
+.notes td {
+	border: 1px solid var(--paper-line);
+	padding: var(--space-1) var(--space-2);
+	text-align: left;
+}
+
+.notes img {
+	max-width: 100%;
+}

@@ -1,4 +1,5 @@
 import { defineConfig, devices } from "@playwright/test";
+import { ownerSession } from "./tests/helpers.ts";
 
 /*
  * End-to-end tests: a browser against the whole stack (web, API, worker,
@@ -20,5 +21,13 @@ export default defineConfig({
 		trace: "retain-on-failure",
 		screenshot: "only-on-failure",
 	},
-	projects: [{ name: "desktop", use: { ...devices["Desktop Chrome"] } }],
+	projects: [
+		// Signs in once: the API allows only a few sign-ins a minute.
+		{ name: "sign-in", testMatch: /sign-in\.setup\.ts$/ },
+		{
+			name: "desktop",
+			use: { ...devices["Desktop Chrome"], storageState: ownerSession },
+			dependencies: ["sign-in"],
+		},
+	],
 });

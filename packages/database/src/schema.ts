@@ -98,6 +98,11 @@ export const projects = pgTable(
 	"projects",
 	{
 		id: id(),
+		/**
+		 * The experiment number (EXP-007): assigned on creation, never
+		 * changed or reused. A creation that rolls back leaves a gap.
+		 */
+		number: integer().notNull().unique().generatedAlwaysAsIdentity(),
 		name: text().notNull(),
 		slug: text().notNull().unique(),
 		description: text().notNull().default(""),

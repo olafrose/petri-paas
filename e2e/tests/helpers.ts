@@ -9,6 +9,10 @@ export const owner = {
 	password: process.env.E2E_OWNER_PASSWORD ?? "end-to-end-password",
 };
 
+/** The owner's session, saved by sign-in.setup.ts for the other tests. */
+export const ownerSession = new URL("../.auth/owner.json", import.meta.url)
+	.pathname;
+
 export async function signIn(page: Page) {
 	await page.goto("/login?next=/admin");
 	await page.getByLabel("Email").fill(owner.email);

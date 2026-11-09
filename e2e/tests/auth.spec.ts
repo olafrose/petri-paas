@@ -1,6 +1,9 @@
 import { expect, test } from "@playwright/test";
 import { owner, signIn } from "./helpers.ts";
 
+// These start signed out.
+test.use({ storageState: { cookies: [], origins: [] } });
+
 test("the admin area needs a session", async ({ page }) => {
 	await page.goto("/admin");
 	await expect(page).toHaveURL(/\/login\?next=%2Fadmin|\/login\?next=\/admin/);

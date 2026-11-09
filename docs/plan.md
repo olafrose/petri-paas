@@ -502,6 +502,18 @@ test.
 **Done when:** a project can be created, described, annotated and
 deleted from the browser, and its number never changes.
 
+**Decided:** the number is an identity column: never reused, also not
+after a project is deleted (a notebook doesn't renumber its pages).
+Existing projects were numbered by creation date in the migration.
+Creating a project checks the slug first, so a refused duplicate or a
+deployment to an existing project doesn't use up a number; only a
+creation that rolls back leaves a gap. Notes are rendered with
+`react-markdown` on the server: raw HTML shows as text, unsafe link
+targets are dropped. Deleting a project is offered only once its
+deployments are deleted, with the reason next to the button. The
+end-to-end tests now sign in once and share the session, as the API
+allows only five sign-ins a minute.
+
 ### 4.4 Deployments
 
 -   Deploy from the dashboard: from Git (repository, ref, directory,
