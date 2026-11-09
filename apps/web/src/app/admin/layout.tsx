@@ -18,8 +18,14 @@ export default async function AdminLayout({
 	return (
 		<>
 			<div className={styles.bar}>
-				<span>Signed in as {session.user.email}</span>
-				<SignOutButton />
+				<nav className={styles.nav} aria-label="Admin">
+					<a href="/admin">Experiments</a>
+					<a href="/admin/deploy">New deployment</a>
+				</nav>
+				<span className={styles.user}>
+					{session.user.email}
+					<SignOutButton />
+				</span>
 			</div>
 			{children}
 		</>
