@@ -6,8 +6,10 @@
 }
 
 .empty {
+	text-align: center;
 	color: var(--ink-soft);
 	font-style: italic;
+	padding: var(--space-5) 0;
 }
 
 .grid {
@@ -15,36 +17,16 @@
 	padding: 0;
 	margin: 0;
 	display: grid;
-	gap: var(--space-3);
-	grid-template-columns: repeat(auto-fill, minmax(16rem, 1fr));
+	gap: var(--space-4);
+	grid-template-columns: repeat(auto-fill, minmax(17rem, 1fr));
 }
 
-.card {
-	background: var(--paper-raised);
-	border: 1px solid var(--paper-line);
-	border-radius: var(--radius);
-	padding: var(--space-3);
+/* An experiment's own page. */
+.back {
+	margin: 0 0 var(--space-3);
+	font-size: 0.9rem;
 }
 
-/* Wide, cropped evenly whatever its shape; decorative (alt=""). */
-.image {
-	display: block;
-	width: calc(100% + 2 * var(--space-3));
-	height: auto;
-	aspect-ratio: 1200 / 630;
-	object-fit: cover;
-	margin: calc(-1 * var(--space-3)) calc(-1 * var(--space-3)) var(--space-3);
-	border-radius: var(--radius) var(--radius) 0 0;
-	border-bottom: 1px solid var(--paper-line);
-}
-
-.card h2 {
-	margin: 0 0 var(--space-2);
-	font-size: 1.15rem;
-}
-
-.meta {
-	color: var(--ink-soft);
-	font-size: 0.875rem;
-	margin-bottom: 0;
+.single {
+	max-width: 44rem;
 }

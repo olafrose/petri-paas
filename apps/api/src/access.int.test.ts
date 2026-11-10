@@ -20,6 +20,7 @@ describe("route protection", () => {
 			expect(
 				url === "/api/v1/health" ||
 					url === "/api/v1/gallery" ||
+					url === "/api/v1/gallery/:slug" ||
 					// Only for experiments the gallery shows (project-images.ts).
 					url === "/api/v1/gallery/:slug/image" ||
 					url === "/api/v1/auth/*" ||

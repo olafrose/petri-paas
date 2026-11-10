@@ -66,6 +66,7 @@ test("deploy a ZIP, open it, stop, start and delete it", async ({
 		.click();
 	await page.getByRole("link", { name: "Edit" }).click();
 	await page.getByLabel("Description").fill("Says hello.");
+	await page.getByLabel("Notes").fill("SECRET-NOTE: never public");
 	await page
 		.getByLabel("Featured deployment")
 		.selectOption({ label: "first (ready)" });
@@ -74,9 +75,11 @@ test("deploy a ZIP, open it, stop, start and delete it", async ({
 	await page.getByLabel("Upload image").setInputFiles(imageFixture);
 	await expect(page.getByRole("img", { name: /^Preview of/ })).toBeVisible();
 
-	// The card shows the image, served publicly (a fresh, signed-out page).
+	// The card shows the image, served publicly: a signed-out visitor,
+	// without JavaScript (the gallery is server-rendered).
 	const visitor = await browser.newContext({
 		storageState: { cookies: [], origins: [] },
+		javaScriptEnabled: false,
 	});
 	const gallery = await visitor.newPage();
 	await gallery.goto("/");
@@ -88,6 +91,43 @@ test("deploy a ZIP, open it, stop, start and delete it", async ({
 		/^\/api\/v1\/gallery\/.+\/image\?v=\d+$/,
 	);
 	await expect.poll(() => image.evaluate(loadedWidth)).toBe(40);
+	await expect(card.getByText("first", { exact: true })).toBeVisible();
+	await expect(card.getByText("ready")).toBeVisible();
+
+	// Try it opens the app.
+	const [app] = await Promise.all([
+		visitor.waitForEvent("page"),
+		card.getByRole("link", { name: /^Try / }).click(),
+	]);
+	await expect(app.getByRole("heading")).toHaveText(
+		"Hello from an end-to-end test",
+	);
+	await app.close();
+
+	// Nothing private reaches the public pages: notes, ids, the source.
+	// (The admin page open in `page` is the project's: its id ends the URL.)
+	const projectId = new URL(page.url()).pathname.split("/").pop() as string;
+	const listed = await gallery.content();
+	expect(listed).not.toContain("SECRET-NOTE");
+	expect(listed).not.toContain(projectId);
+	expect(listed).not.toMatch(/uploadId|projectId|featuredDeploymentId/);
+
+	// Its own page, for sharing: the link preview shows its image.
+	await card.getByRole("link", { name: project, exact: true }).click();
+	await expect(gallery).toHaveURL(new RegExp(`/experiments/${project}$`));
+	await expect(gallery.getByRole("heading", { level: 1 })).toHaveText(project);
+	const meta = (property: string) =>
+		gallery.locator(`meta[property="${property}"]`).getAttribute("content");
+	expect(await meta("og:title")).toBe(project);
+	expect(await meta("og:description")).toBe("Says hello.");
+	expect(await meta("og:image")).toMatch(
+		new RegExp(
+			`^http://localhost:\\d+/api/v1/gallery/${project}/image\\?v=\\d+$`,
+		),
+	);
+	const html = await gallery.content();
+	expect(html).not.toContain("SECRET-NOTE");
+	expect(html).not.toContain(projectId);
 	await visitor.close();
 
 	// Listed on the overview, with a link to open it.
