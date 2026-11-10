@@ -51,7 +51,8 @@ export interface BuildImageResult {
 	outputFile: string;
 }
 
-const DEFAULT_TIMEOUT_MS = 15 * 60 * 1000;
+/** How long a build may take. */
+export const DEFAULT_BUILD_TIMEOUT_MS = 15 * 60 * 1000;
 const DEFAULT_MAX_LOG_BYTES = 5 * 1024 * 1024;
 
 /**
@@ -96,7 +97,7 @@ export async function buildImage(
 	try {
 		await runBuildctl(options.buildctlPath ?? "buildctl", args, {
 			env: { PATH: process.env.PATH, HOME: home, LANG: "C" },
-			timeoutMs: options.timeoutMs ?? DEFAULT_TIMEOUT_MS,
+			timeoutMs: options.timeoutMs ?? DEFAULT_BUILD_TIMEOUT_MS,
 			signal: options.signal,
 			onLine: (line) => {
 				log?.write(line);

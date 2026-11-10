@@ -40,6 +40,8 @@ export const apiConfigSchema = commonSchema
 		UPLOADS_DIR: z.string().default(join(tmpdir(), "petri-uploads")),
 		/** Build logs written by the worker (shared, read-only here). */
 		LOGS_DIR: z.string().default(join(tmpdir(), "petri-logs")),
+		/** The commit the image was built from; set in the image by CI. */
+		PETRI_COMMIT: z.string().min(1).optional(),
 		OIDC_ISSUER: z.url().optional(),
 		OIDC_CLIENT_ID: z.string().min(1).optional(),
 		OIDC_CLIENT_SECRET: z.string().min(1).optional(),

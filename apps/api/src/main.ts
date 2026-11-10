@@ -34,6 +34,7 @@ const app = await buildApp({
 	uploads: { uploadsDir: config.UPLOADS_DIR },
 	publicUrl: config.PUBLIC_URL,
 	previewBaseUrl: config.PREVIEW_BASE_URL,
+	commit: config.PETRI_COMMIT,
 	trustProxy: config.TRUST_PROXY,
 	logger: { level: config.LOG_LEVEL },
 });

@@ -51,6 +51,17 @@ describe("apiConfigSchema", () => {
 		expect(oidcOptions(config)).toBeUndefined();
 	});
 
+	test("the commit is optional, and empty in images built without it", () => {
+		expect(loadConfig(apiConfigSchema, base).PETRI_COMMIT).toBeUndefined();
+		expect(
+			loadConfig(apiConfigSchema, { ...base, PETRI_COMMIT: "" }).PETRI_COMMIT,
+		).toBeUndefined();
+		expect(
+			loadConfig(apiConfigSchema, { ...base, PETRI_COMMIT: "abc123" })
+				.PETRI_COMMIT,
+		).toBe("abc123");
+	});
+
 	test("requires a long enough secret", () => {
 		expect(() =>
 			loadConfig(apiConfigSchema, { ...base, AUTH_SECRET: "short" }),

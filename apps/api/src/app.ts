@@ -20,6 +20,7 @@ import { deploymentRoutes } from "./routes/deployments.ts";
 import { galleryRoutes } from "./routes/gallery.ts";
 import { healthRoutes } from "./routes/health.ts";
 import { projectRoutes } from "./routes/projects.ts";
+import { settingsRoutes } from "./routes/settings.ts";
 import { type UploadOptions, uploadRoutes } from "./routes/uploads.ts";
 
 export interface AppOptions {
@@ -39,6 +40,8 @@ export interface AppOptions {
 	publicUrl: string;
 	/** Previews are served at <subdomain>.<this URL's host>. */
 	previewBaseUrl: string;
+	/** The commit this build is from, shown in the settings. */
+	commit?: string | undefined;
 	/** Reverse proxies whose X-Forwarded-For is trusted. */
 	trustProxy?: string[];
 	logger?: FastifyServerOptions["logger"];
@@ -55,6 +58,7 @@ export async function buildApp({
 	uploads,
 	publicUrl,
 	previewBaseUrl,
+	commit,
 	trustProxy = [],
 	logger = false,
 }: AppOptions) {
@@ -116,6 +120,14 @@ export async function buildApp({
 		...uploads,
 	});
 	await app.register(apiKeyRoutes, { prefix, db });
+	await app.register(settingsRoutes, {
+		prefix,
+		publicUrl,
+		previewBaseUrl,
+		commit,
+		maxUploadBytes: uploads.maxUploadBytes,
+		zipLimits: uploads.zipLimits,
+	});
 
 	return app;
 }

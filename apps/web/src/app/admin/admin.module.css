@@ -10,7 +10,8 @@
 
 .nav {
 	display: flex;
-	gap: var(--space-4);
+	flex-wrap: wrap;
+	gap: var(--space-2) var(--space-4);
 }
 
 .nav a {
