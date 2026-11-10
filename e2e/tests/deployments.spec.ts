@@ -1,5 +1,11 @@
 import { expect, test } from "@playwright/test";
-import { fixtureZip, statusStamp, unique } from "./helpers.ts";
+import {
+	fixtureZip,
+	imageFixture,
+	loadedWidth,
+	statusStamp,
+	unique,
+} from "./helpers.ts";
 
 test("the API's validation shows next to the field", async ({ page }) => {
 	await page.goto("/admin/deploy");
@@ -17,6 +23,7 @@ test("the API's validation shows next to the field", async ({ page }) => {
 test("deploy a ZIP, open it, stop, start and delete it", async ({
 	page,
 	context,
+	browser,
 }) => {
 	const project = unique("e2e");
 	await page.goto("/admin/deploy");
@@ -64,10 +71,24 @@ test("deploy a ZIP, open it, stop, start and delete it", async ({
 		.selectOption({ label: "first (ready)" });
 	await page.getByRole("button", { name: "Save" }).click();
 	await expect(page.getByText("In the gallery, with “first”.")).toBeVisible();
-	const gallery = await context.newPage();
+	await page.getByLabel("Upload image").setInputFiles(imageFixture);
+	await expect(page.getByRole("img", { name: /^Preview of/ })).toBeVisible();
+
+	// The card shows the image, served publicly (a fresh, signed-out page).
+	const visitor = await browser.newContext({
+		storageState: { cookies: [], origins: [] },
+	});
+	const gallery = await visitor.newPage();
 	await gallery.goto("/");
-	await expect(gallery.getByText("Says hello.")).toBeVisible();
-	await gallery.close();
+	const card = gallery.locator("li", { hasText: "Says hello." });
+	await expect(card).toBeVisible();
+	const image = card.locator("img");
+	await expect(image).toHaveAttribute(
+		"src",
+		/^\/api\/v1\/gallery\/.+\/image\?v=\d+$/,
+	);
+	await expect.poll(() => image.evaluate(loadedWidth)).toBe(40);
+	await visitor.close();
 
 	// Listed on the overview, with a link to open it.
 	await page.goto("/admin");

@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { imageRef } from "./projects.ts";
 
 /**
  * A project as shown in the public gallery. Deliberately minimal: nothing
@@ -10,6 +11,7 @@ export const galleryItem = z
 		name: z.string(),
 		description: z.string(),
 		updatedAt: z.iso.datetime(),
+		image: imageRef.nullable(),
 		deployment: z.object({
 			name: z.string().meta({ description: "Branch or version shown" }),
 			status: z.literal("ready"),

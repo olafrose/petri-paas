@@ -19,6 +19,7 @@ import { deploymentLiveRoutes } from "./routes/deployment-live.ts";
 import { deploymentRoutes } from "./routes/deployments.ts";
 import { galleryRoutes } from "./routes/gallery.ts";
 import { healthRoutes } from "./routes/health.ts";
+import { projectImageRoutes } from "./routes/project-images.ts";
 import { projectRoutes } from "./routes/projects.ts";
 import { settingsRoutes } from "./routes/settings.ts";
 import { type UploadOptions, uploadRoutes } from "./routes/uploads.ts";
@@ -102,7 +103,16 @@ export async function buildApp({
 	await app.register(healthRoutes, { prefix, db });
 	await app.register(authRoutes, { prefix, auth, publicUrl });
 	await app.register(galleryRoutes, { prefix, db, previewBaseUrl });
-	await app.register(projectRoutes, { prefix, db });
+	await app.register(projectRoutes, {
+		prefix,
+		db,
+		uploadsDir: uploads.uploadsDir,
+	});
+	await app.register(projectImageRoutes, {
+		prefix,
+		db,
+		uploadsDir: uploads.uploadsDir,
+	});
 	await app.register(deploymentRoutes, { prefix, db, jobs, previewBaseUrl });
 	await app.register(deploymentLiveRoutes, {
 		prefix,

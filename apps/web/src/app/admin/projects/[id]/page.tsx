@@ -15,6 +15,7 @@ import styles from "../../dashboard.module.css";
 import { DeploymentList, lastChange } from "../../deployment-list.tsx";
 import { loadProject } from "../load-project.ts";
 import { DeleteProject } from "./delete-project.tsx";
+import { ProjectImage } from "./project-image.tsx";
 
 export const metadata: Metadata = { title: "Experiment" };
 
@@ -110,6 +111,15 @@ export default async function ProjectPage({
 						<DeploymentList deployments={deleted} />
 					</details>
 				)}
+			</section>
+
+			<section className={styles.section}>
+				<Hand as="h2">Preview image</Hand>
+				<ProjectImage
+					projectId={project.id}
+					name={project.name}
+					image={project.image}
+				/>
 			</section>
 
 			<section className={styles.section}>

@@ -585,6 +585,19 @@ read, create and update by default; delete is opt-in.
 **Done when:** an image appears on the gallery card, and files that
 aren't images, or are too large, are refused (tests with crafted files).
 
+**Decided:** the request body is the file itself (`curl --data-binary
+@shot.png`), and its declared type is ignored. A small parser reads the
+PNG, JPEG or WebP header for the type and size (each side 16 to 8192
+pixels), with no image library; it is tested against files encoded by
+Chromium and against crafted ones. Images are never re-encoded: they're
+served with the type found on upload, `nosniff`, and a content security
+policy that allows nothing, and are cached for five minutes, so a hidden
+experiment's image doesn't linger. Their URLs carry the upload time, so
+a new image shows at once. The admin page loads the image through
+`GET /projects/:id/image` (also for private projects); the gallery's
+route serves only what the gallery shows. The card shows the image
+cropped to 1200 × 630; the rest of the card is 4.8.
+
 ### 4.8 Public gallery
 
 -   Cards: preview image (or a sketch as placeholder), name,

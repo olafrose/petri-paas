@@ -19,6 +19,17 @@ export default async function GalleryPage() {
 				<ul className={styles.grid}>
 					{items.map((item) => (
 						<li key={item.slug} className={styles.card}>
+							{item.image && (
+								// biome-ignore lint/performance/noImgElement: served by the API, sized
+								<img
+									className={styles.image}
+									src={item.image.url}
+									width={item.image.width}
+									height={item.image.height}
+									alt=""
+									loading="lazy"
+								/>
+							)}
 							<h2>{item.name}</h2>
 							{item.description && <p>{item.description}</p>}
 							<p className={styles.meta}>

@@ -3,6 +3,7 @@ import { type Database, deployments, projects } from "@petri/database";
 import { previewUrl } from "@petri/deployment-core";
 import { and, desc, eq } from "drizzle-orm";
 import type { FastifyPluginAsyncZod } from "fastify-type-provider-zod";
+import { galleryImageRef } from "../image.ts";
 
 /**
  * The public gallery: public projects whose featured deployment is ready.
@@ -30,6 +31,7 @@ export const galleryRoutes: FastifyPluginAsyncZod<{
 					name: projects.name,
 					description: projects.description,
 					updatedAt: projects.updatedAt,
+					image: projects.image,
 					deploymentName: deployments.name,
 					subdomain: deployments.subdomain,
 				})
@@ -51,6 +53,7 @@ export const galleryRoutes: FastifyPluginAsyncZod<{
 				name: row.name,
 				description: row.description,
 				updatedAt: row.updatedAt.toISOString(),
+				image: row.image && galleryImageRef(row.slug, row.image),
 				deployment: {
 					name: row.deploymentName,
 					status: "ready",

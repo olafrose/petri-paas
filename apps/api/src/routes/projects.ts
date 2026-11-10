@@ -1,3 +1,4 @@
+import { rm } from "node:fs/promises";
 import {
 	createProjectBody,
 	errorResponse,
@@ -17,12 +18,13 @@ import { and, desc, eq, ne } from "drizzle-orm";
 import type { FastifyPluginAsyncZod } from "fastify-type-provider-zod";
 import { z } from "zod";
 import { ApiError } from "../errors.ts";
+import { imagePath, projectImageRef } from "../image.ts";
 import { slugify } from "../slug.ts";
 
 type ProjectRow = typeof projects.$inferSelect;
 
 /** Maps a database row to the API shape, so no column leaks by accident. */
-function toProject(row: ProjectRow): Project {
+export function toProject(row: ProjectRow): Project {
 	return {
 		id: row.id,
 		number: row.number,
@@ -32,6 +34,7 @@ function toProject(row: ProjectRow): Project {
 		notes: row.notes,
 		visibility: row.visibility,
 		featuredDeploymentId: row.featuredDeploymentId,
+		image: row.image && projectImageRef(row.id, row.image),
 		createdAt: row.createdAt.toISOString(),
 		updatedAt: row.updatedAt.toISOString(),
 	};
@@ -39,10 +42,11 @@ function toProject(row: ProjectRow): Project {
 
 const notFound = () => new ApiError(404, "not_found", "Project not found");
 
-export const projectRoutes: FastifyPluginAsyncZod<{ db: Database }> = async (
-	app,
-	{ db },
-) => {
+export const projectRoutes: FastifyPluginAsyncZod<{
+	db: Database;
+	/** Where preview images are stored, to remove them with the project. */
+	uploadsDir: string;
+}> = async (app, { db, uploadsDir }) => {
 	const tags = ["projects"];
 
 	app.post(
@@ -253,6 +257,7 @@ export const projectRoutes: FastifyPluginAsyncZod<{ db: Database }> = async (
 				}
 				await tx.delete(projects).where(eq(projects.id, id));
 			});
+			await rm(imagePath(uploadsDir, id), { force: true });
 			return reply.status(204).send(null);
 		},
 	);
