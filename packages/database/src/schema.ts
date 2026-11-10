@@ -94,6 +94,16 @@ export interface BuildOptions {
 	args: Record<string, string>;
 }
 
+/** A project's preview image, stored in the uploads volume. Stored as JSON. */
+export interface ProjectImage {
+	/** Found from the file's content, never from its name. */
+	type: "png" | "jpeg" | "webp";
+	width: number;
+	height: number;
+	/** ISO time of the upload; changes the image's URL, for caches. */
+	updatedAt: string;
+}
+
 export const projects = pgTable(
 	"projects",
 	{
@@ -108,6 +118,8 @@ export const projects = pgTable(
 		description: text().notNull().default(""),
 		notes: text().notNull().default(""),
 		visibility: visibility().notNull().default("public"),
+		/** Null when the project has no preview image. */
+		image: jsonb().$type<ProjectImage>(),
 		/**
 		 * The deployment the public gallery shows. Must belong to this
 		 * project; the API enforces that.

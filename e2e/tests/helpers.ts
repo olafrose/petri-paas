@@ -36,6 +36,18 @@ export function fixtureZip(name: string) {
 	};
 }
 
+/** A real PNG (40×30), shared with the API's tests. */
+export const imageFixture = new URL(
+	"../../apps/api/test/fixtures/images/photo.png",
+	import.meta.url,
+).pathname;
+
+/** An image element's width once loaded, or 0 (for expect.poll). */
+export const loadedWidth = (element: unknown) => {
+	const image = element as { complete: boolean; naturalWidth: number };
+	return image.complete ? image.naturalWidth : 0;
+};
+
 /** The status stamp next to a deployment page's title. */
 export const statusStamp = (page: Page) => page.locator("h1 + span");
 

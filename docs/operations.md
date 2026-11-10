@@ -286,8 +286,8 @@ the GHCR package pages); `PETRI_TAG=main` follows `main`.
   Current firewall rules        `sudo nft list table inet petri`
 
 **Backups** (procedures follow in phase 6): the database holds all
-state; uploads and build logs are in the `petri_uploads` and
-`petri_build-logs` volumes.
+state; uploads (ZIP archives and preview images) and build logs are in
+the `petri_uploads` and `petri_build-logs` volumes.
 
 ```bash
 docker compose exec -T postgres pg_dump -U petri petri | gzip > petri-$(date +%F).sql.gz

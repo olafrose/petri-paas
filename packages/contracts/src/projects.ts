@@ -3,6 +3,19 @@ import { dnsLabel } from "./common.ts";
 
 export const visibility = z.enum(["public", "private"]);
 
+/** A preview image: where to load it, and its size. */
+export const imageRef = z
+	.object({
+		url: z.string().meta({
+			description: "Path of the image; changes when a new one is uploaded",
+		}),
+		width: z.int().positive(),
+		height: z.int().positive(),
+	})
+	.meta({ id: "ImageRef" });
+
+export type ImageRef = z.infer<typeof imageRef>;
+
 export const project = z
 	.object({
 		id: z.uuid(),
@@ -18,6 +31,9 @@ export const project = z
 			.uuid()
 			.nullable()
 			.meta({ description: "Deployment shown in the public gallery" }),
+		image: imageRef
+			.nullable()
+			.meta({ description: "Preview image for the gallery" }),
 		createdAt: z.iso.datetime(),
 		updatedAt: z.iso.datetime(),
 	})

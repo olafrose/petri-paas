@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { unique } from "./helpers.ts";
+import { imageFixture, loadedWidth, unique } from "./helpers.ts";
 
 test("create, describe, annotate and delete an experiment", async ({
 	page,
@@ -46,6 +46,22 @@ test("create, describe, annotate and delete an experiment", async ({
 	await expect(
 		page.getByText("Private: not shown in the gallery."),
 	).toBeVisible();
+
+	// A preview image: anything else is refused, by its content.
+	await page.getByLabel("Upload image").setInputFiles({
+		name: "looks-like.png",
+		mimeType: "image/png",
+		buffer: Buffer.from("<html><script>alert(1)</script></html>"),
+	});
+	await expect(page.getByText("Not a PNG, JPEG or WebP image")).toBeVisible();
+	await page.getByLabel("Upload image").setInputFiles(imageFixture);
+	const preview = page.getByRole("img", {
+		name: "Preview of Notebook test, renamed",
+	});
+	await expect.poll(() => preview.evaluate(loadedWidth)).toBe(40);
+	await page.getByRole("button", { name: "Remove" }).click();
+	await expect(preview).toHaveCount(0);
+	await expect(page.getByLabel("Upload image")).toBeAttached();
 
 	// Same number after the edit, and on the overview.
 	await expect(page.getByText(number as string, { exact: true })).toBeVisible();

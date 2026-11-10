@@ -12,12 +12,13 @@ export type ApiResult<T> =
 
 /** Sends a request and turns the API's error format into a message. */
 export async function apiSend<T>(
-	method: "POST" | "PATCH" | "DELETE",
+	method: "POST" | "PUT" | "PATCH" | "DELETE",
 	path: `/api/v1/${string}`,
 	body?: unknown,
 ): Promise<ApiResult<T>> {
 	const init: RequestInit = { method };
-	if (body instanceof FormData) {
+	// Forms and files (e.g. an image, sent as it is) go unchanged.
+	if (body instanceof FormData || body instanceof Blob) {
 		init.body = body;
 	} else if (body !== undefined) {
 		init.body = JSON.stringify(body);
