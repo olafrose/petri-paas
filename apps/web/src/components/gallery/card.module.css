@@ -1,0 +1,87 @@
+/* Gallery cards: image (or a sketch), then the experiment. */
+
+.card {
+	display: flex;
+	flex-direction: column;
+	height: 100%;
+	background: var(--paper-raised);
+	border: 1px solid var(--paper-line);
+	border-radius: var(--radius);
+	overflow: hidden;
+}
+
+/* Wide, cropped evenly whatever its shape; decorative (alt=""). */
+.image,
+.placeholder {
+	display: block;
+	width: 100%;
+	height: auto;
+	aspect-ratio: 1200 / 630;
+	object-fit: cover;
+	border-bottom: 1px solid var(--paper-line);
+}
+
+.placeholder {
+	display: grid;
+	place-items: center;
+	background: var(--paper);
+}
+
+.body {
+	display: flex;
+	flex-direction: column;
+	gap: var(--space-2);
+	padding: var(--space-3);
+	flex: 1;
+}
+
+.name {
+	font-family: var(--font-hand);
+	font-size: calc(1.7rem * var(--hand-scale));
+	line-height: 1.1;
+	margin: 0;
+}
+
+.name a {
+	color: var(--ink);
+	text-decoration: none;
+}
+
+.name a:hover {
+	text-decoration: underline;
+	text-decoration-color: var(--accent);
+}
+
+.description {
+	margin: 0;
+}
+
+.meta {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: var(--space-2) var(--space-3);
+	margin: 0;
+	color: var(--ink-soft);
+	font-size: 0.875rem;
+}
+
+.version {
+	font-family: var(--font-mono);
+	font-size: 0.8rem;
+	overflow-wrap: anywhere;
+}
+
+/* Try it sits at the bottom, so cards in a row line up. */
+.actions {
+	margin-top: auto;
+	padding-top: var(--space-2);
+}
+
+.large .name {
+	font-size: calc(2.6rem * var(--hand-scale));
+}
+
+.large .description {
+	font-size: 1.1rem;
+}

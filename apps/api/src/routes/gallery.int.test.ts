@@ -1,4 +1,4 @@
-import type { Gallery } from "@petri/contracts";
+import type { Gallery, GalleryItem } from "@petri/contracts";
 import { deployments, projects } from "@petri/database";
 import { eq } from "drizzle-orm";
 import { expect, test } from "vitest";
@@ -80,4 +80,25 @@ test("never exposes notes, sources or ids", async () => {
 test("is empty when nothing is on display", async () => {
 	const response = await ctx.anonymous({ url: "/api/v1/gallery" });
 	expect(response.json()).toEqual({ items: [] });
+});
+
+test("shows one experiment by slug, only if the gallery shows it", async () => {
+	await addProject("shown");
+	await addProject("private-one", { visibility: "private" });
+	await addProject("stopped-one", { status: "stopped" });
+
+	const response = await ctx.anonymous({ url: "/api/v1/gallery/shown" });
+	expect(response.statusCode).toBe(200);
+	const item = response.json<GalleryItem>();
+	const list = (
+		await ctx.anonymous({ url: "/api/v1/gallery" })
+	).json<Gallery>();
+	expect(item).toEqual(list.items[0]);
+	expect(response.body).not.toContain("private lab notes");
+	expect(response.body).not.toContain("example.com/secret");
+
+	for (const slug of ["private-one", "stopped-one", "nothing"]) {
+		const hidden = await ctx.anonymous({ url: `/api/v1/gallery/${slug}` });
+		expect(hidden.statusCode).toBe(404);
+	}
 });

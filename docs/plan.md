@@ -611,6 +611,15 @@ cropped to 1200 × 630; the rest of the card is 4.8.
 **Done when:** from a phone outside the homelab, the gallery shows the
 featured experiments with images, and **Try it** opens them.
 
+**Decided:** each experiment in the gallery also gets its own page,
+`/experiments/<slug>` (from `GET /gallery/:slug`, public, the same
+fields and conditions), so a shared link previews that experiment with
+its image; the gallery's own preview uses the newest image. Link
+previews need absolute URLs: the web container now gets `PUBLIC_URL`
+(already in `.env`). Both pages work without JavaScript, which the
+end-to-end test checks, along with **Try it** opening the app and the
+public pages containing no notes or ids.
+
 **Result:** petri. is usable as a personal lab notebook and public
 showroom, without curl.
 

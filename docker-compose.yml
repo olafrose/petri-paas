@@ -180,6 +180,8 @@ services:
     tmpfs: [/tmp, /app/apps/web/.next/cache]
     environment:
       API_INTERNAL_URL: http://api:4000
+      # Absolute links in the gallery's link previews.
+      PUBLIC_URL: ${PUBLIC_URL:?Set PUBLIC_URL}
     ports:
       # The only published port. Bind to the address NPM reaches.
       - "${WEB_BIND:-127.0.0.1}:${WEB_PORT:-3000}:3000"
