@@ -12,7 +12,7 @@
 		"owner:set": "node --conditions=@petri/source --env-file-if-exists=../../.env src/cli/set-owner.ts"
 	},
 	"dependencies": {
-		"@fastify/multipart": "^10.1.7",
+		"@fastify/multipart": "^10.1.8",
 		"@fastify/swagger": "^9.9.3",
 		"@fastify/swagger-ui": "^6.1.3",
 		"@petri/build-engine": "workspace:*",
@@ -22,7 +22,7 @@
 		"@petri/deployment-core": "workspace:*",
 		"@petri/jobs": "workspace:*",
 		"@petri/runtime": "workspace:*",
-		"better-auth": "^1.7.18",
+		"better-auth": "^1.7.19",
 		"drizzle-orm": "0.45.4",
 		"fastify": "^5.12.8",
 		"fastify-type-provider-zod": "^7.0.0",
