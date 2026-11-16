@@ -40,10 +40,10 @@ export default async function ExperimentsPage() {
 			<div className={styles.titleRow}>
 				<Hand as="h1">Experiments</Hand>
 				<span className={styles.titleActions}>
-					<ButtonLink variant="secondary" href="/admin/projects/new">
+					<ButtonLink variant="secondary" href="/admin/experiments/new">
 						New experiment
 					</ButtonLink>
-					<ButtonLink href="/admin/deploy">New deployment</ButtonLink>
+					<ButtonLink href="/admin/cultures/new">New culture</ButtonLink>
 				</span>
 			</div>
 
@@ -52,7 +52,7 @@ export default async function ExperimentsPage() {
 					<Sketch kind="dish" />
 					<p>
 						No experiments yet. Start one with your{" "}
-						<a href="/admin/deploy">first deployment</a>.
+						<a href="/admin/cultures/new">first culture</a>.
 					</p>
 				</div>
 			) : (
@@ -69,7 +69,7 @@ export default async function ExperimentsPage() {
 										<Hand as="h2">
 											<a
 												className={styles.entryLink}
-												href={`/admin/projects/${project.id}`}
+												href={`/admin/experiments/${project.id}`}
 											>
 												{project.name}
 											</a>
@@ -84,13 +84,13 @@ export default async function ExperimentsPage() {
 									<p className={styles.description}>{project.description}</p>
 								)}
 								{shown.length === 0 ? (
-									<p className={styles.soft}>No running deployments.</p>
+									<p className={styles.soft}>No living cultures.</p>
 								) : (
 									<DeploymentList deployments={shown} />
 								)}
 								{deleted > 0 && (
 									<p className={styles.soft}>
-										{deleted} deleted deployment{deleted === 1 ? "" : "s"}
+										{deleted} deleted culture{deleted === 1 ? "" : "s"}
 									</p>
 								)}
 							</li>

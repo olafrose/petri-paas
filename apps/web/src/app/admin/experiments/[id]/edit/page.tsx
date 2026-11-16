@@ -30,7 +30,7 @@ export default async function EditProjectPage({
 		<>
 			<p className={styles.soft}>
 				<a href="/admin">Experiments</a> /{" "}
-				<a href={`/admin/projects/${project.id}`}>{project.name}</a> /
+				<a href={`/admin/experiments/${project.id}`}>{project.name}</a> /
 			</p>
 			<div className={styles.titleRow}>
 				<span className={styles.entryTitle}>

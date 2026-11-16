@@ -25,6 +25,28 @@ const config: NextConfig = {
 			{ source: "/api/v1/:path*", destination: `${apiUrl}/api/v1/:path*` },
 		];
 	},
+	// The admin panel's old paths, from before deployments were called
+	// cultures (and projects experiments) on screen.
+	async redirects() {
+		return [
+			{
+				source: "/admin/projects/:path*",
+				destination: "/admin/experiments/:path*",
+				permanent: true,
+			},
+			{
+				source: "/admin/deployments/:path*",
+				destination: "/admin/cultures/:path*",
+				permanent: true,
+			},
+			// The query comes along: the form also reads `?project=`.
+			{
+				source: "/admin/deploy",
+				destination: "/admin/cultures/new",
+				permanent: true,
+			},
+		];
+	},
 	// Type-checking runs separately (pnpm typecheck), with the whole repo.
 	typescript: { ignoreBuildErrors: true },
 };

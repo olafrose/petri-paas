@@ -10,8 +10,8 @@ export default function NewProjectPage() {
 		<>
 			<Hand as="h1">New experiment</Hand>
 			<p className={styles.lead}>
-				Describe it now and deploy to it later, or just deploy: a new project
-				name in the deploy form starts an experiment too.
+				Describe it now and grow cultures in it later, or just grow one: a new
+				experiment name in the culture form starts an experiment too.
 			</p>
 			<ProjectForm />
 		</>

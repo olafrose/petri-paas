@@ -20,7 +20,7 @@ export default async function AdminLayout({
 			<div className={styles.bar}>
 				<nav className={styles.nav} aria-label="Admin">
 					<a href="/admin">Experiments</a>
-					<a href="/admin/deploy">New deployment</a>
+					<a href="/admin/cultures/new">New culture</a>
 					<a href="/admin/api-keys">API keys</a>
 					<a href="/admin/settings">Settings</a>
 				</nav>

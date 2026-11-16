@@ -12,7 +12,7 @@ export function DeploymentList({ deployments }: { deployments: Deployment[] }) {
 					<StatusStamp status={deployment.status} />
 					<a
 						className={styles.deploymentName}
-						href={`/admin/deployments/${deployment.id}`}
+						href={`/admin/cultures/${deployment.id}`}
 					>
 						{deployment.name}
 					</a>

@@ -97,7 +97,7 @@ export default function StyleGuidePage() {
 			<section className={styles.section}>
 				<Hand as="h2">Buttons and labels</Hand>
 				<div className={styles.row}>
-					<Button>Deploy</Button>
+					<Button>Grow culture</Button>
 					<Button variant="secondary">Stop</Button>
 					<Button variant="danger">Delete</Button>
 					<ButtonLink href="#try">Try it →</ButtonLink>
@@ -140,7 +140,7 @@ export default function StyleGuidePage() {
 				<div className={styles.empties}>
 					<div className={styles.empty}>
 						<Sketch kind="dish" />
-						<p>No experiments yet. Start one with your first deployment.</p>
+						<p>No experiments yet. Start one with your first culture.</p>
 					</div>
 					<div className={styles.empty}>
 						<Sketch kind="flask" />

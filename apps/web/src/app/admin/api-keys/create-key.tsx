@@ -11,11 +11,11 @@ import keyStyles from "./keys.module.css";
 const SCOPES: { scope: Scope; text: string }[] = [
 	{
 		scope: "deploy:read",
-		text: "See projects, deployments, logs and settings",
+		text: "See experiments, cultures, logs and settings",
 	},
-	{ scope: "deploy:create", text: "Create projects and deployments" },
-	{ scope: "deploy:update", text: "Edit projects; stop and start deployments" },
-	{ scope: "deploy:delete", text: "Delete projects and deployments" },
+	{ scope: "deploy:create", text: "Create experiments and grow cultures" },
+	{ scope: "deploy:update", text: "Edit experiments; stop and start cultures" },
+	{ scope: "deploy:delete", text: "Delete experiments and cultures" },
 ];
 
 /**

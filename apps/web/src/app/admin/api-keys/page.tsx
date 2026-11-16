@@ -28,8 +28,8 @@ export default async function ApiKeysPage() {
 		<>
 			<Hand as="h1">API keys</Hand>
 			<p className={styles.lead}>
-				For coding assistants and scripts: they deploy through the API with a
-				key, limited to what its scopes allow. Keys can't manage keys.
+				For coding assistants and scripts: they grow cultures through the API
+				with a key, limited to what its scopes allow. Keys can't manage keys.
 			</p>
 
 			<section className={styles.section}>

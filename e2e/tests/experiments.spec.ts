@@ -12,14 +12,14 @@ test("create, describe, annotate and delete an experiment", async ({
 	await page.getByLabel("Description").fill("Checks the experiment pages.");
 	await page.getByRole("button", { name: "Create experiment" }).click();
 
-	await expect(page).toHaveURL(/\/admin\/projects\/[0-9a-f-]+$/);
+	await expect(page).toHaveURL(/\/admin\/experiments\/[0-9a-f-]+$/);
 	await expect(page.getByRole("heading", { level: 1 })).toHaveText(
 		"Notebook test",
 	);
 	const number = await page.getByText(/^EXP-\d{3,}$/).textContent();
 	await expect(page.getByText("Checks the experiment pages.")).toBeVisible();
 	await expect(
-		page.getByText("Not in the gallery yet: choose a featured deployment"),
+		page.getByText("Not in the gallery yet: choose a featured culture"),
 	).toBeVisible();
 
 	// Notes in Markdown; HTML in them is shown as text, never run.
@@ -33,7 +33,7 @@ test("create, describe, annotate and delete an experiment", async ({
 		);
 	await page.getByRole("button", { name: "Save" }).click();
 
-	await expect(page).toHaveURL(/\/admin\/projects\/[0-9a-f-]+$/);
+	await expect(page).toHaveURL(/\/admin\/experiments\/[0-9a-f-]+$/);
 	await expect(page.getByRole("heading", { level: 1 })).toHaveText(
 		"Notebook test, renamed",
 	);
@@ -78,12 +78,12 @@ test("create, describe, annotate and delete an experiment", async ({
 });
 
 test("the API's validation shows next to the field", async ({ page }) => {
-	await page.goto("/admin/projects/new");
+	await page.goto("/admin/experiments/new");
 	await page.getByLabel("Name").fill("Bad slug");
 	await page.getByLabel("Slug").fill("Not A Slug");
 	await page.getByRole("button", { name: "Create experiment" }).click();
 
 	await expect(page.getByText("Please check the marked fields.")).toBeVisible();
 	await expect(page.getByLabel("Slug")).toHaveAttribute("aria-invalid", "true");
-	await expect(page).toHaveURL(/\/admin\/projects\/new$/);
+	await expect(page).toHaveURL(/\/admin\/experiments\/new$/);
 });

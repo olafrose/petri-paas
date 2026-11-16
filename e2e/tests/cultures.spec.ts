@@ -1,5 +1,6 @@
 import { expect, test } from "@playwright/test";
 import {
+	expectLabWords,
 	fixtureZip,
 	imageFixture,
 	loadedWidth,
@@ -8,16 +9,16 @@ import {
 } from "./helpers.ts";
 
 test("the API's validation shows next to the field", async ({ page }) => {
-	await page.goto("/admin/deploy");
+	await page.goto("/admin/cultures/new");
 	await page.getByLabel("Repository").fill("http://plain-http.example.com/app");
-	await page.getByLabel("Project").fill(unique("e2e"));
-	await page.getByRole("button", { name: "Deploy" }).click();
+	await page.getByLabel("Experiment").fill(unique("e2e"));
+	await page.getByRole("button", { name: "Grow culture" }).click();
 
 	await expect(page.getByText("Please check the marked fields.")).toBeVisible();
 	const repository = page.getByLabel("Repository");
 	await expect(repository).toHaveAttribute("aria-invalid", "true");
 	await expect(repository).toHaveAccessibleDescription("Invalid URL");
-	await expect(page).toHaveURL(/\/admin\/deploy$/);
+	await expect(page).toHaveURL(/\/admin\/cultures\/new$/);
 });
 
 test("deploy a ZIP, open it, stop, start and delete it", async ({
@@ -26,17 +27,18 @@ test("deploy a ZIP, open it, stop, start and delete it", async ({
 	browser,
 }) => {
 	const project = unique("e2e");
-	await page.goto("/admin/deploy");
+	await page.goto("/admin/cultures/new");
 	await page.getByRole("button", { name: "ZIP upload" }).click();
 	await page.getByLabel("ZIP archive").setInputFiles(fixtureZip("hello"));
-	await page.getByLabel("Project").fill(project);
+	await page.getByLabel("Experiment").fill(project);
 	await page.getByLabel("Name").fill("first");
-	await page.getByRole("button", { name: "Deploy" }).click();
+	await page.getByRole("button", { name: "Grow culture" }).click();
 
-	// The deployment page follows the build live, without reloading.
-	await expect(page).toHaveURL(/\/admin\/deployments\/[0-9a-f-]+$/);
+	// The culture page follows the build live, without reloading.
+	await expect(page).toHaveURL(/\/admin\/cultures\/[0-9a-f-]+$/);
 	await expect(statusStamp(page)).toHaveText("ready", { timeout: 90_000 });
 	await expect(page.getByText(/^Ready at http/)).toBeVisible();
+	await expectLabWords(page);
 	await expect(page.locator("pre").last()).toContainText(
 		"[petri] Building image",
 	);
@@ -64,11 +66,13 @@ test("deploy a ZIP, open it, stop, start and delete it", async ({
 	await page
 		.getByRole("link", { name: new RegExp(`EXP-\\d+ ${project}`) })
 		.click();
+	await expect(page.getByRole("heading", { name: "Cultures" })).toBeVisible();
+	await expectLabWords(page);
 	await page.getByRole("link", { name: "Edit" }).click();
 	await page.getByLabel("Description").fill("Says hello.");
 	await page.getByLabel("Notes").fill("SECRET-NOTE: never public");
 	await page
-		.getByLabel("Featured deployment")
+		.getByLabel("Featured culture")
 		.selectOption({ label: "first (ready)" });
 	await page.getByRole("button", { name: "Save" }).click();
 	await expect(page.getByText("In the gallery, with “first”.")).toBeVisible();
@@ -163,7 +167,7 @@ test("deploy a ZIP, open it, stop, start and delete it", async ({
 		.getByRole("link", { name: new RegExp(`EXP-\\d+ ${project}`) })
 		.click();
 	await expect(
-		page.getByText("1 deleted deployment (history kept)"),
+		page.getByText("1 deleted culture (history kept)"),
 	).toBeVisible();
 	page.once("dialog", (dialog) => dialog.accept());
 	await page.getByRole("button", { name: "Delete experiment" }).click();
@@ -171,23 +175,43 @@ test("deploy a ZIP, open it, stop, start and delete it", async ({
 	await expect(page.getByText(project)).toHaveCount(0);
 });
 
-test("an experiment with deployments can't be deleted yet", async ({
-	page,
-}) => {
+test("an experiment with cultures can't be deleted yet", async ({ page }) => {
 	const project = unique("e2e-keep");
-	await page.goto("/admin/deploy");
+	await page.goto("/admin/cultures/new");
 	await page.getByRole("button", { name: "ZIP upload" }).click();
 	await page.getByLabel("ZIP archive").setInputFiles(fixtureZip("hello"));
-	await page.getByLabel("Project").fill(project);
-	await page.getByRole("button", { name: "Deploy" }).click();
-	await expect(page).toHaveURL(/\/admin\/deployments\/[0-9a-f-]+$/);
+	await page.getByLabel("Experiment").fill(project);
+	await page.getByRole("button", { name: "Grow culture" }).click();
+	await expect(page).toHaveURL(/\/admin\/cultures\/[0-9a-f-]+$/);
 
 	await page
 		.getByRole("link", { name: new RegExp(`EXP-\\d+ ${project}`) })
 		.click();
 	const remove = page.getByRole("button", { name: "Delete experiment" });
 	await expect(remove).toBeDisabled();
-	await expect(remove).toHaveAccessibleDescription(
-		/^Delete its deployment first/,
+	await expect(remove).toHaveAccessibleDescription(/^Delete its culture first/);
+});
+
+test("pages speak of experiments and cultures", async ({ page }) => {
+	for (const path of [
+		"/",
+		"/admin",
+		"/admin/cultures/new",
+		"/admin/experiments/new",
+		"/admin/api-keys",
+		"/admin/settings",
+	]) {
+		await page.goto(path);
+		await expectLabWords(page);
+	}
+});
+
+test("the old admin paths lead to the new ones", async ({ page }) => {
+	await page.goto("/admin/deploy?project=some-experiment");
+	await expect(page).toHaveURL(
+		/\/admin\/cultures\/new\?project=some-experiment$/,
 	);
+	await expect(page.getByLabel("Experiment")).toHaveValue("some-experiment");
+	await page.goto("/admin/projects/new");
+	await expect(page).toHaveURL(/\/admin\/experiments\/new$/);
 });

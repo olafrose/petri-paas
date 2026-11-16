@@ -23,7 +23,7 @@ export function DeploymentActions({
 		if (
 			action === "delete" &&
 			!window.confirm(
-				"Delete this deployment? Its app, image and upload are removed; the history stays.",
+				"Delete this culture? Its app, image and upload are removed; the history stays.",
 			)
 		) {
 			return;

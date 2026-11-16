@@ -28,7 +28,7 @@ function galleryNote(project: Project, deployments: Deployment[]) {
 		return "Private: not shown in the gallery.";
 	}
 	if (!featured) {
-		return "Not in the gallery yet: choose a featured deployment under Edit.";
+		return "Not in the gallery yet: choose a featured culture under Edit.";
 	}
 	if (featured.status !== "ready") {
 		return `Not in the gallery while “${featured.name}” is ${featured.status.replace("_", " ")}.`;
@@ -60,12 +60,12 @@ export default async function ProjectPage({
 				<span className={styles.titleActions}>
 					<ButtonLink
 						variant="secondary"
-						href={`/admin/projects/${project.id}/edit`}
+						href={`/admin/experiments/${project.id}/edit`}
 					>
 						Edit
 					</ButtonLink>
-					<ButtonLink href={`/admin/deploy?project=${project.slug}`}>
-						New deployment
+					<ButtonLink href={`/admin/cultures/new?experiment=${project.slug}`}>
+						New culture
 					</ButtonLink>
 				</span>
 			</div>
@@ -96,16 +96,16 @@ export default async function ProjectPage({
 			</dl>
 
 			<section className={styles.section}>
-				<Hand as="h2">Deployments</Hand>
+				<Hand as="h2">Cultures</Hand>
 				{shown.length === 0 ? (
-					<p className={styles.soft}>No running deployments.</p>
+					<p className={styles.soft}>No living cultures.</p>
 				) : (
 					<DeploymentList deployments={shown} />
 				)}
 				{deleted.length > 0 && (
 					<details className={styles.deleted}>
 						<summary>
-							{deleted.length} deleted deployment
+							{deleted.length} deleted culture
 							{deleted.length === 1 ? "" : "s"} (history kept)
 						</summary>
 						<DeploymentList deployments={deleted} />
@@ -129,8 +129,8 @@ export default async function ProjectPage({
 				) : (
 					<p className={styles.soft}>
 						No notes yet.{" "}
-						<a href={`/admin/projects/${project.id}/edit`}>Add some</a> — only
-						you see them.
+						<a href={`/admin/experiments/${project.id}/edit`}>Add some</a> —
+						only you see them.
 					</p>
 				)}
 			</section>

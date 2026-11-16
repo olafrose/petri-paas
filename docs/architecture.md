@@ -879,6 +879,11 @@ and request validation.
 
 The frontend has two distinct areas.
 
+The interface speaks the lab's language: a project is an *experiment*,
+and a deployment is a *culture* that the experiment grows. The API,
+the code and the database keep the names *project* and *deployment*,
+so API paths, fields and scopes (`deploy:*`) are unchanged.
+
 ### 13.1 Private lab dashboard
 
 The dashboard provides:

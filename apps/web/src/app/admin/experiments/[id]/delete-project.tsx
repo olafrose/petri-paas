@@ -29,7 +29,7 @@ export function DeleteProject({
 	async function remove() {
 		if (
 			!window.confirm(
-				`Delete ${label}? Its notes and the history of its deployments are removed for good. Its number isn't used again.`,
+				`Delete ${label}? Its notes and the history of its cultures are removed for good. Its number isn't used again.`,
 			)
 		) {
 			return;
@@ -58,10 +58,9 @@ export function DeleteProject({
 			</Button>
 			{remaining > 0 && (
 				<span id={`${id}-delete-note`} className={styles.soft}>
-					Delete its{" "}
-					{remaining === 1 ? "deployment" : `${remaining} deployments`} first:
-					until then, petri. needs this experiment's records to find and remove
-					what they run.
+					Delete its {remaining === 1 ? "culture" : `${remaining} cultures`}{" "}
+					first: until then, petri. needs this experiment's records to find and
+					remove what they run.
 				</span>
 			)}
 			{error && (

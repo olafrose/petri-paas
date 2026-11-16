@@ -59,7 +59,7 @@ export function ProjectForm({
 		setPending(false);
 
 		if (result.ok) {
-			router.push(`/admin/projects/${result.data.id}`);
+			router.push(`/admin/experiments/${result.data.id}`);
 			router.refresh();
 			return;
 		}
@@ -129,7 +129,7 @@ export function ProjectForm({
 
 			{project && (
 				<Field
-					label="Featured deployment"
+					label="Featured culture"
 					hint="The one the gallery shows, while it is ready"
 					error={fields.featuredDeploymentId}
 				>
@@ -171,7 +171,7 @@ export function ProjectForm({
 				</Button>
 				<ButtonLink
 					variant="secondary"
-					href={project ? `/admin/projects/${project.id}` : "/admin"}
+					href={project ? `/admin/experiments/${project.id}` : "/admin"}
 				>
 					Cancel
 				</ButtonLink>
