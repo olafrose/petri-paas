@@ -13,6 +13,7 @@ import {
 import { registerAccessControl } from "./access.ts";
 import type { Auth } from "./auth/auth.ts";
 import { registerErrorHandling } from "./errors.ts";
+import { accessRequestRoutes } from "./routes/access-requests.ts";
 import { apiKeyRoutes } from "./routes/api-keys.ts";
 import { authRoutes } from "./routes/auth.ts";
 import { deploymentLiveRoutes } from "./routes/deployment-live.ts";
@@ -43,6 +44,8 @@ export interface AppOptions {
 	previewBaseUrl: string;
 	/** The commit this build is from, shown in the settings. */
 	commit?: string | undefined;
+	/** Minimum seconds between polls of an access request (default 5). */
+	accessPollIntervalSeconds?: number;
 	/** Reverse proxies whose X-Forwarded-For is trusted. */
 	trustProxy?: string[];
 	logger?: FastifyServerOptions["logger"];
@@ -60,6 +63,7 @@ export async function buildApp({
 	publicUrl,
 	previewBaseUrl,
 	commit,
+	accessPollIntervalSeconds,
 	trustProxy = [],
 	logger = false,
 }: AppOptions) {
@@ -130,6 +134,14 @@ export async function buildApp({
 		...uploads,
 	});
 	await app.register(apiKeyRoutes, { prefix, db });
+	await app.register(accessRequestRoutes, {
+		prefix,
+		db,
+		publicUrl,
+		...(accessPollIntervalSeconds !== undefined && {
+			pollIntervalSeconds: accessPollIntervalSeconds,
+		}),
+	});
 	await app.register(settingsRoutes, {
 		prefix,
 		publicUrl,

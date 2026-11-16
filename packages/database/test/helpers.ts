@@ -20,6 +20,7 @@ export function useTestDatabase(): Database {
 	beforeEach(async () => {
 		await db.execute(sql`
 			truncate projects, deployments, builds, deployment_events, api_keys,
+				access_requests,
 				users, sessions, accounts, verifications, rate_limits
 			restart identity cascade
 		`);

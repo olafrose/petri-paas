@@ -24,6 +24,9 @@ describe("route protection", () => {
 					// Only for experiments the gallery shows (project-images.ts).
 					url === "/api/v1/gallery/:slug/image" ||
 					url === "/api/v1/auth/*" ||
+					// Coding assistants asking for a key (access-requests.ts).
+					url === "/api/v1/access-requests" ||
+					url === "/api/v1/access-requests/token" ||
 					url.startsWith("/api/v1/docs"),
 				`unexpected public route ${url}`,
 			).toBe(true);

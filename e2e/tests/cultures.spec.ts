@@ -200,6 +200,7 @@ test("pages speak of experiments and cultures", async ({ page }) => {
 		"/admin/experiments/new",
 		"/admin/api-keys",
 		"/admin/settings",
+		"/admin/access-requests",
 	]) {
 		await page.goto(path);
 		await expectLabWords(page);
