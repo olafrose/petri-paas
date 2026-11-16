@@ -45,9 +45,6 @@ const SAFE_METHODS = new Set(["GET", "HEAD", "OPTIONS"]);
 /** Routes registered by plugins we don't control. */
 const PUBLIC_PREFIXES = ["/api/v1/docs"];
 
-const unauthorized = () =>
-	new ApiError(401, "unauthorized", "Sign in or provide an API key");
-
 /**
  * Authenticates every request and enforces each route's `access` rule.
  * Register before any routes.
@@ -57,6 +54,16 @@ export function registerAccessControl(
 	{ db, auth, publicUrl }: { db: Database; auth: Auth; publicUrl: string },
 ) {
 	const publicOrigin = new URL(publicUrl).origin;
+	// Coding assistants without a key learn where to read how to get one.
+	const guideUrl = new URL("/api/v1/guide", publicUrl).toString();
+	const unauthorized = () =>
+		new ApiError(
+			401,
+			"unauthorized",
+			"Sign in or provide an API key",
+			undefined,
+			guideUrl,
+		);
 	app.decorateRequest("principal", null);
 	app.decorate("routeAccess", []);
 
@@ -124,7 +131,7 @@ async function authenticate(
 		// the session cookie.
 		const [kind, token] = authorization.split(" ");
 		if (kind?.toLowerCase() !== "bearer" || !token || !looksLikeApiKey(token)) {
-			throw unauthorized();
+			return null;
 		}
 		return authenticateApiKey(db, token);
 	}

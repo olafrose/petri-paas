@@ -87,3 +87,19 @@ test("a code that matches no open request is pointed out", async ({ page }) => {
 	await page.goto("/admin/access-requests?code=BCDF-GHJK");
 	await expect(page.getByText(/No open request with the code/)).toBeVisible();
 });
+
+test("assistants find the guide at /llms.txt", async ({
+	playwright,
+	baseURL,
+}) => {
+	const assistant = await playwright.request.newContext({
+		baseURL: baseURL as string,
+	});
+	const response = await assistant.get("/llms.txt");
+	expect(response.status()).toBe(200);
+	expect(response.headers()["content-type"]).toContain("text/markdown");
+	const text = await response.text();
+	expect(text).toMatch(/^# petri\. — a guide for coding assistants/);
+	expect(text).toContain(`${baseURL}/api/v1/access-requests`);
+	await assistant.dispose();
+});

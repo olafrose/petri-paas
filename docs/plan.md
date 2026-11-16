@@ -734,6 +734,16 @@ Granting and denying are owner only, like key management.
 guide, request access and grow a culture by following it; a test makes
 sure every endpoint the guide names exists with the access it claims.
 
+**Decided:** the guide is a template in the API (`guide.ts`), filled in
+once at startup with `PUBLIC_URL` and the preview domain; the web app
+forwards `/llms.txt` to it. Its endpoint table is a list in code; tests
+check each entry against the registered routes and their access rules,
+and every API address in the text against the routes. The examples use
+`<…>` placeholders for what the assistant fills in (repository,
+experiment slug, culture name). Errors gained an optional
+`help` link: 401 answers point to the guide, so the admin panel's
+messages stay as they were. The API keys page points to `/llms.txt`.
+
 
 
 -   Temporary and permanent modes, TTL extension, cleanup job.

@@ -30,6 +30,10 @@ export const errorResponse = z
 				)
 				.optional()
 				.meta({ description: "Per-field problems, for validation errors" }),
+			help: z
+				.url()
+				.optional()
+				.meta({ description: "Where to read how to fix it" }),
 		}),
 	})
 	.meta({ id: "Error" });

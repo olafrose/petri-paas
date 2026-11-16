@@ -126,6 +126,7 @@ scopes `deploy:read`, `deploy:create`, `deploy:update` and
 Coding assistants can also ask for a key themselves
 (`POST /api/v1/access-requests`); the owner grants or denies it under
 **Access requests** in the admin panel.
+Their guide to petri. is at `/llms.txt` (`GET /api/v1/guide`).
 
 Sign-in through an OpenID Connect provider such as Authentik can be
 enabled later with the `OIDC_*` variables in `.env.example`.
