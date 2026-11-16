@@ -66,6 +66,7 @@ function KeyList({ keys, now }: { keys: ApiKey[]; now: number }) {
 					<div className={keyStyles.head}>
 						<strong>{key.name}</strong>
 						<code>{key.prefix}…</code>
+						{key.accessRequestId && <Label>via access request</Label>}
 						{key.revokedAt && <Label>revoked</Label>}
 						{!key.revokedAt &&
 							key.expiresAt &&

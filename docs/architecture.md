@@ -873,6 +873,14 @@ API keys should support scopes such as:
 Keys must be revocable. The API should also support sensible rate limits
 and request validation.
 
+Assistants don't need the owner to hand them a key: they can ask for
+one. `POST /api/v1/access-requests` (public) answers with a short code,
+a review link and a secret poll token; the assistant shows the code and
+link to its user, and polls `POST /api/v1/access-requests/token`. The
+owner grants (possibly with fewer scopes) or denies in the admin panel;
+once granted, the next poll returns an ordinary API key, exactly once.
+The flow follows the OAuth device authorization grant (RFC 8628).
+
 ------------------------------------------------------------------------
 
 ## 13. Dashboard and public showcase

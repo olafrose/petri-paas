@@ -1,22 +1,13 @@
 "use client";
 
-import type { CreatedApiKey, Scope } from "@petri/contracts";
+import type { CreatedApiKey } from "@petri/contracts";
 import { useRouter } from "next/navigation";
 import { type FormEvent, useState } from "react";
 import { Button, Field } from "../../../components/notebook/index.tsx";
 import { apiSend } from "../../../lib/client-api.ts";
+import { SCOPES } from "../../../lib/scopes.ts";
 import styles from "../dashboard.module.css";
 import keyStyles from "./keys.module.css";
-
-const SCOPES: { scope: Scope; text: string }[] = [
-	{
-		scope: "deploy:read",
-		text: "See experiments, cultures, logs and settings",
-	},
-	{ scope: "deploy:create", text: "Create experiments and grow cultures" },
-	{ scope: "deploy:update", text: "Edit experiments; stop and start cultures" },
-	{ scope: "deploy:delete", text: "Delete experiments and cultures" },
-];
 
 /**
  * Creates a key and shows it once, with a copy button and a curl line

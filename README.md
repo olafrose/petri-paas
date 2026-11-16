@@ -123,6 +123,9 @@ Access to the API:
 API keys are created by the owner (`POST /api/v1/api-keys`) with the
 scopes `deploy:read`, `deploy:create`, `deploy:update` and
 `deploy:delete`. Keys cannot manage keys.
+Coding assistants can also ask for a key themselves
+(`POST /api/v1/access-requests`); the owner grants or denies it under
+**Access requests** in the admin panel.
 
 Sign-in through an OpenID Connect provider such as Authentik can be
 enabled later with the `OIDC_*` variables in `.env.example`.

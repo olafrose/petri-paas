@@ -16,7 +16,7 @@ import { ApiError } from "../errors.ts";
 
 type ApiKeyRow = typeof apiKeys.$inferSelect;
 
-function toApiKey(row: ApiKeyRow): ApiKey {
+export function toApiKey(row: ApiKeyRow): ApiKey {
 	return {
 		id: row.id,
 		name: row.name,
@@ -26,10 +26,11 @@ function toApiKey(row: ApiKeyRow): ApiKey {
 		lastUsedAt: row.lastUsedAt?.toISOString() ?? null,
 		expiresAt: row.expiresAt?.toISOString() ?? null,
 		revokedAt: row.revokedAt?.toISOString() ?? null,
+		accessRequestId: row.accessRequestId,
 	};
 }
 
-const DAY_MS = 24 * 60 * 60 * 1000;
+export const DAY_MS = 24 * 60 * 60 * 1000;
 
 /** API key management. Owner only: keys cannot manage keys. */
 export const apiKeyRoutes: FastifyPluginAsyncZod<{ db: Database }> = async (

@@ -25,6 +25,9 @@ export const apiKey = z
 		lastUsedAt: z.iso.datetime().nullable(),
 		expiresAt: z.iso.datetime().nullable(),
 		revokedAt: z.iso.datetime().nullable(),
+		accessRequestId: z.uuid().nullable().meta({
+			description: "The access request the key was granted for, if any",
+		}),
 	})
 	.meta({ id: "ApiKey" });
 

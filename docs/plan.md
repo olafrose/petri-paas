@@ -698,7 +698,43 @@ the owner only clicking **Grant** (end-to-end test); a denied or
 expired request never yields a key; a poll token works only once after
 the grant.
 
-### Later in this phase (outline)
+**Decided:** the key is created when the assistant collects it, so it
+is never stored; granting records the scopes and the key's lifetime,
+and gives the assistant another 15 minutes to collect. Codes are eight
+consonants (`WXYZ-BCDF`, RFC 8628's alphabet); the review link carries
+the code, and the page marks the matching request. Limits are counted
+in the database: five requests per address in ten minutes (the address
+as for sign-in, through `TRUST_PROXY`), ten open at a time, polls at
+most every five seconds (429 `slow_down`). A second collection answers
+410 `already_collected`. Expired requests are removed a day later;
+collected ones stay, as the key's `accessRequestId` points to them.
+Granting and denying are owner only, like key management.
+
+### 5.3 A guide for coding assistants
+
+-   `GET /guide` (public): a short how-to in Markdown, written for
+    coding assistants, read in full before they start. The web app also
+    serves it as `/llms.txt`.
+-   Contents: what petri. is (experiments grow cultures; a culture is a
+    preview at its own address; the gallery is public); getting access
+    (5.2: show the user the code and link, poll, keep the key and never
+    print it); growing a culture from Git or a ZIP (Dockerfile, port,
+    experiment slug and name); following it (status, events, the build
+    log on failure, `url` once ready); ground rules (temporary by
+    default, delete only what you created, check `GET /settings` before
+    uploading, ask the user before making anything public or featured);
+    and the OpenAPI document, with the API's names next to the
+    interface's (*deployment* = culture, *project* = experiment).
+-   Filled in from the running instance: the real public URL and preview
+    domain, so examples work as written. Limits stay behind
+    `GET /settings`; the guide shows nothing the gallery doesn't.
+-   The API keys page and the 401 answer point to the guide.
+
+**Done when:** an assistant given only petri.'s address can find the
+guide, request access and grow a culture by following it; a test makes
+sure every endpoint the guide names exists with the access it claims.
+
+
 
 -   Temporary and permanent modes, TTL extension, cleanup job.
 -   Buildpacks via `pack` and Paketo.

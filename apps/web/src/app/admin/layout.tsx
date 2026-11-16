@@ -22,6 +22,7 @@ export default async function AdminLayout({
 					<a href="/admin">Experiments</a>
 					<a href="/admin/cultures/new">New culture</a>
 					<a href="/admin/api-keys">API keys</a>
+					<a href="/admin/access-requests">Access requests</a>
 					<a href="/admin/settings">Settings</a>
 				</nav>
 				<span className={styles.user}>

@@ -225,6 +225,47 @@ export const deploymentEvents = pgTable(
 	(table) => [index().on(table.deploymentId, table.id)],
 );
 
+/**
+ * Where an access request stands. Expiry is not a status: a request
+ * past `expiresAt` is expired unless its key was collected.
+ */
+export const accessRequestStatus = pgEnum("access_request_status", [
+	"pending",
+	"denied",
+	/** Granted; the key is created when the requester collects it. */
+	"granted",
+	"collected",
+]);
+
+/** A coding assistant asking for an API key (see access-requests.ts). */
+export const accessRequests = pgTable(
+	"access_requests",
+	{
+		id: id(),
+		name: text().notNull(),
+		reason: text(),
+		/** Requested; narrowed to the granted ones on grant. */
+		scopes: text().array().notNull(),
+		status: accessRequestStatus().notNull().default("pending"),
+		/** Shown to the user and the owner, e.g. WXYZ-BCDF. */
+		userCode: text().notNull().unique(),
+		/** SHA-256 of the poll token, which only the requester knows. */
+		pollTokenHash: text().notNull().unique(),
+		address: text().notNull(),
+		userAgent: text(),
+		/** Lifetime of the granted key, in days; null: no expiry. */
+		keyExpiresInDays: integer(),
+		lastPolledAt: timestamp({ withTimezone: true }),
+		decidedAt: timestamp({ withTimezone: true }),
+		expiresAt: timestamp({ withTimezone: true }).notNull(),
+		createdAt: createdAt(),
+	},
+	(table) => [
+		check("access_requests_has_scopes", sql`cardinality(${table.scopes}) > 0`),
+		index().on(table.address, table.createdAt),
+	],
+);
+
 export const apiKeys = pgTable(
 	"api_keys",
 	{
@@ -238,6 +279,10 @@ export const apiKeys = pgTable(
 		lastUsedAt: timestamp({ withTimezone: true }),
 		expiresAt: timestamp({ withTimezone: true }),
 		revokedAt: timestamp({ withTimezone: true }),
+		/** Set for keys granted through an access request. */
+		accessRequestId: uuid().references(() => accessRequests.id, {
+			onDelete: "set null",
+		}),
 		createdAt: createdAt(),
 	},
 	(table) => [
