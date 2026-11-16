@@ -3,9 +3,9 @@
 import type { Deployment } from "@petri/contracts";
 import { useRouter } from "next/navigation";
 import { type FormEvent, useState } from "react";
-import { Button, Field } from "../../../components/notebook/index.tsx";
-import { apiSend } from "../../../lib/client-api.ts";
-import styles from "../dashboard.module.css";
+import { Button, Field } from "../../../../components/notebook/index.tsx";
+import { apiSend } from "../../../../lib/client-api.ts";
+import styles from "../../dashboard.module.css";
 
 type Source = "git" | "zip";
 
@@ -85,7 +85,7 @@ export function DeployForm({
 		setPending(false);
 
 		if (result.ok) {
-			router.push(`/admin/deployments/${result.data.id}`);
+			router.push(`/admin/cultures/${result.data.id}`);
 			return;
 		}
 		setError(result.message);
@@ -168,8 +168,8 @@ export function DeployForm({
 			)}
 
 			<Field
-				label="Project"
-				hint="Lower case, digits and dashes. A new name creates the project."
+				label="Experiment"
+				hint="Lower case, digits and dashes. A new name starts an experiment."
 				error={fieldError("project")}
 			>
 				<input
@@ -209,7 +209,7 @@ export function DeployForm({
 
 			<Field
 				label="Subdomain"
-				hint="Optional: generated from project and name"
+				hint="Optional: generated from experiment and name"
 				error={fieldError("subdomain")}
 			>
 				<input name="subdomain" />
@@ -246,7 +246,7 @@ export function DeployForm({
 					Permanent
 				</label>
 				<span className={styles.soft}>
-					Temporary deployments are removed automatically once expiry is
+					Temporary cultures are removed automatically once expiry is
 					implemented (phase 5).
 				</span>
 			</fieldset>
@@ -258,7 +258,7 @@ export function DeployForm({
 			)}
 			<div>
 				<Button type="submit" disabled={pending}>
-					{pending ? "Deploying…" : "Deploy"}
+					{pending ? "Growing…" : "Grow culture"}
 				</Button>
 			</div>
 		</form>

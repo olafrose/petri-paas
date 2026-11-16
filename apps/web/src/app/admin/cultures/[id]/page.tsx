@@ -17,7 +17,7 @@ import { DeploymentActions } from "./deployment-actions.tsx";
 import { RuntimeLog } from "./runtime-log.tsx";
 import { Timeline } from "./timeline.tsx";
 
-export const metadata: Metadata = { title: "Deployment" };
+export const metadata: Metadata = { title: "Culture" };
 
 export default async function DeploymentPage({
 	params,
@@ -51,7 +51,7 @@ export default async function DeploymentPage({
 		<>
 			<p className={styles.soft}>
 				<a href="/admin">Experiments</a> /{" "}
-				<a href={`/admin/projects/${owner.id}`}>
+				<a href={`/admin/experiments/${owner.id}`}>
 					{experimentLabel(owner.number)} {owner.name}
 				</a>
 			</p>

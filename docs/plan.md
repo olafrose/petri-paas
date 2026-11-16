@@ -623,12 +623,87 @@ public pages containing no notes or ids.
 **Result:** petri. is usable as a personal lab notebook and public
 showroom, without curl.
 
-## Phase 5 --- Lifecycle and automation (outline)
+## Phase 5 --- Lifecycle and automation
+
+**Goal:** coding assistants get access without the owner copying keys
+around, and cultures live as long as they should.
+
+**Starting point:** the admin panel calls projects *experiments* but
+still says *deployments*, and in places *projects*. A coding assistant
+needs a key the owner creates in the admin panel and pastes into it.
+
+**Order:** 5.1 settles the words that 5.2's screens use. The rest of
+the phase is outlined below and gets detailed when it starts.
+
+### 5.1 Cultures (deployments)
+
+-   In everything a person reads, a deployment is now a *culture*: an
+    experiment grows cultures. That covers the admin panel, the
+    gallery, page titles and confirmations. Screens that still say
+    *project* say *experiment*.
+-   Wording: **New culture**, **Grow culture** (the deploy button;
+    *Start* stays the action for a stopped culture), **Featured
+    culture**, "Delete this culture?". Statuses and the stop, start and
+    delete actions keep their names.
+-   The API keeps its names: paths, fields, scopes (`deploy:*`), events,
+    error messages and the OpenAPI document; so do the code and the
+    database. The API key page explains each scope in the new words.
+-   Admin URLs follow the words (`/admin/cultures/:id`,
+    `/admin/experiments/:id`); the old paths redirect.
+-   Architecture section 13 notes which words the interface uses for
+    which API resource. The README and the operations guide describe
+    the API and keep its words.
+
+**Done when:** no page of the web app says *deployment* or *project*
+(an end-to-end test walks the admin pages), and the API is unchanged.
+Messages the API sends, shown next to form fields, keep the API's
+words.
+
+**Decided:** the admin pages moved to `/admin/experiments/…` and
+`/admin/cultures/…` (`/admin/cultures/new` for the form); the old paths
+redirect, and the form still reads `?project=` from old links. A list
+without cultures says "No living cultures." The end-to-end check leaves
+out logs and the history, which show what builds, apps and the worker
+wrote. The React components and test helpers keep their code names
+(`DeploymentList`, `ProjectForm`).
+
+### 5.2 Access requests for coding assistants
+
+A coding assistant asks for access; the owner grants or denies it in
+the admin panel; the assistant then receives an API key. The flow
+follows the OAuth device authorization grant (RFC 8628), without the
+rest of OAuth.
+
+-   `POST /access-requests` (public): the assistant names itself (e.g.
+    "Claude Code on laptop"), asks for scopes and may give a reason.
+    The answer holds a short code (`WXYZ-1234`), the admin link to
+    review it, a secret poll token, the expiry (15 minutes) and the
+    polling interval.
+-   `POST /access-requests/token` (public): with the poll token, answers
+    `pending`, `denied` or `expired`; once granted, the API key, exactly
+    once. Only the poll token gets the key; the short code only lets the
+    owner tell requests apart.
+-   Admin panel, **Access requests**: open requests with name, scopes,
+    reason, code, address and time. **Grant** (scopes can be narrowed,
+    an expiry chosen) or **Deny**. Owner only.
+-   A granted request becomes an ordinary API key: same scopes, expiry,
+    revocation and "last used", listed on the API keys page with where
+    it came from. No new scopes.
+-   The public endpoints are limited: a rate limit per address, at most
+    10 open requests, and the poll interval enforced (`slow_down`).
+    Poll tokens are stored hashed, like keys.
+
+**Done when:** an assistant can go from nothing to a working key with
+the owner only clicking **Grant** (end-to-end test); a denied or
+expired request never yields a key; a poll token works only once after
+the grant.
+
+### Later in this phase (outline)
 
 -   Temporary and permanent modes, TTL extension, cleanup job.
 -   Buildpacks via `pack` and Paketo.
 -   Redeploy and recovery flows; reconciliation job.
--   API polish for coding assistants.
+-   Further API polish for coding assistants.
 
 ## Phase 6 --- Hardening (outline)
 

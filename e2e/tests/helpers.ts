@@ -48,9 +48,25 @@ export const loadedWidth = (element: unknown) => {
 	return image.complete ? image.naturalWidth : 0;
 };
 
-/** The status stamp next to a deployment page's title. */
+/** The status stamp next to a culture page's title. */
 export const statusStamp = (page: Page) => page.locator("h1 + span");
 
-/** A name no earlier run used, for projects and subdomains. */
+/** A name no earlier run used, for experiments and subdomains. */
 export const unique = (prefix: string) =>
 	`${prefix}-${Date.now().toString(36)}`;
+
+/**
+ * Pages speak of experiments and cultures, never of projects or
+ * deployments (the API's words). Logs and the history are left out:
+ * they show what the build, the app and the worker wrote.
+ */
+export async function expectLabWords(page: Page) {
+	const text = await page.locator("body").evaluate((body) => {
+		const copy = body.cloneNode(true) as typeof body;
+		for (const element of copy.querySelectorAll("pre, ol, script")) {
+			element.remove();
+		}
+		return copy.textContent ?? "";
+	});
+	expect(text).not.toMatch(/\b(deployments?|projects?)\b/i);
+}
