@@ -23,6 +23,8 @@ const config: NextConfig = {
 	async rewrites() {
 		return [
 			{ source: "/api/v1/:path*", destination: `${apiUrl}/api/v1/:path*` },
+			// The guide for coding assistants, where they look for one.
+			{ source: "/llms.txt", destination: `${apiUrl}/api/v1/guide` },
 		];
 	},
 	// The admin panel's old paths, from before deployments were called

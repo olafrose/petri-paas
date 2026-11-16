@@ -10,18 +10,21 @@ export class ApiError extends Error {
 	readonly statusCode: number;
 	readonly code: string;
 	readonly details: ErrorResponse["error"]["details"];
+	readonly help: string | undefined;
 
 	constructor(
 		statusCode: number,
 		code: string,
 		message: string,
 		details?: ErrorResponse["error"]["details"],
+		help?: string,
 	) {
 		super(message);
 		this.name = "ApiError";
 		this.statusCode = statusCode;
 		this.code = code;
 		this.details = details;
+		this.help = help;
 	}
 }
 
@@ -51,6 +54,7 @@ export function registerErrorHandling(app: FastifyInstance) {
 					code: error.code,
 					message: error.message,
 					...(error.details && { details: error.details }),
+					...(error.help && { help: error.help }),
 				},
 			};
 		} else if (hasZodFastifySchemaValidationErrors(error)) {

@@ -19,6 +19,7 @@ import { authRoutes } from "./routes/auth.ts";
 import { deploymentLiveRoutes } from "./routes/deployment-live.ts";
 import { deploymentRoutes } from "./routes/deployments.ts";
 import { galleryRoutes } from "./routes/gallery.ts";
+import { guideRoutes } from "./routes/guide.ts";
 import { healthRoutes } from "./routes/health.ts";
 import { projectImageRoutes } from "./routes/project-images.ts";
 import { projectRoutes } from "./routes/projects.ts";
@@ -105,6 +106,7 @@ export async function buildApp({
 
 	const prefix = "/api/v1";
 	await app.register(healthRoutes, { prefix, db });
+	await app.register(guideRoutes, { prefix, publicUrl, previewBaseUrl });
 	await app.register(authRoutes, { prefix, auth, publicUrl });
 	await app.register(galleryRoutes, { prefix, db, previewBaseUrl });
 	await app.register(projectRoutes, {

@@ -19,6 +19,7 @@ describe("route protection", () => {
 		for (const url of publicRoutes) {
 			expect(
 				url === "/api/v1/health" ||
+					url === "/api/v1/guide" ||
 					url === "/api/v1/gallery" ||
 					url === "/api/v1/gallery/:slug" ||
 					// Only for experiments the gallery shows (project-images.ts).

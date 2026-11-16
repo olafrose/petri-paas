@@ -881,6 +881,10 @@ owner grants (possibly with fewer scopes) or denies in the admin panel;
 once granted, the next poll returns an ordinary API key, exactly once.
 The flow follows the OAuth device authorization grant (RFC 8628).
 
+Where to start is described for them in `GET /api/v1/guide` (also at
+`/llms.txt`): a short Markdown guide to access, growing a culture,
+following it, and the ground rules. 401 answers link to it.
+
 ------------------------------------------------------------------------
 
 ## 13. Dashboard and public showcase

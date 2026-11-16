@@ -31,6 +31,14 @@ export default async function ApiKeysPage() {
 				For coding assistants and scripts: they grow cultures through the API
 				with a key, limited to what its scopes allow. Keys can't manage keys.
 			</p>
+			<p className={styles.lead}>
+				An assistant can also ask for a key itself: point it to{" "}
+				<a href="/llms.txt">
+					<code>{publicUrl}/llms.txt</code>
+				</a>
+				, its guide to petri. You grant the request under{" "}
+				<a href="/admin/access-requests">Access requests</a>.
+			</p>
 
 			<section className={styles.section}>
 				<Hand as="h2">New key</Hand>
