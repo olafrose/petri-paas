@@ -632,8 +632,10 @@ around, and cultures live as long as they should.
 still says *deployments*, and in places *projects*. A coding assistant
 needs a key the owner creates in the admin panel and pastes into it.
 
-**Order:** 5.1 settles the words that 5.2's screens use. The rest of
-the phase is outlined below and gets detailed when it starts.
+**Order:** 5.1 settles the words that 5.2's screens use. 5.4 comes
+next: temporary cultures pile up until it exists. 5.5 builds on its
+expired state, and 5.6 on both. 5.7 is small and can come anytime. 5.8
+is last: it starts with a spike whose outcome may change it.
 
 ### 5.1 Cultures (deployments)
 
@@ -744,16 +746,147 @@ experiment slug, culture name). Errors gained an optional
 `help` link: 401 answers point to the guide, so the admin panel's
 messages stay as they were. The API keys page points to `/llms.txt`.
 
+### 5.4 Expiry
 
+Temporary cultures get an expiry time today (`expiresAt`, 48 hours by
+default), but nothing acts on it: they run until deleted.
 
--   Temporary and permanent modes, TTL extension, cleanup job.
--   Buildpacks via `pack` and Paketo.
--   Redeploy and recovery flows; reconciliation job.
--   Further API polish for coding assistants.
+-   A cleanup job in the worker (a pg-boss schedule, every five minutes)
+    finds temporary cultures past `expiresAt` that are ready, stopped or
+    failed. Each becomes `expired` first, so the edge proxy stops
+    routing it, then its container, network and image are removed. The
+    history, build logs and the uploaded archive stay, so it can be
+    grown again (5.5).
+-   `PATCH /deployments/:id` (scope `deploy:update`) changes the
+    lifecycle: extend a temporary culture (`ttlHours`, counted from
+    now, at most 720), or make it permanent, or temporary again. Not
+    for cultures that are expired, deleting or deleted.
+-   Admin panel: the culture page shows the time left, with **Extend**
+    (another 48 hours) and **Keep** (permanent); the experiment list
+    marks cultures that expire within a day. The note "once expiry is
+    implemented (phase 5)" goes.
+-   The guide mentions extending, and the endpoint table gains `PATCH`.
+
+**Done when:** a temporary culture past its time stops answering
+within five minutes and is shown as expired with its history intact;
+an extended or permanent one keeps running (integration tests with the
+time moved, end-to-end test for the buttons).
+
+### 5.5 Redeploy
+
+Today a new version means a new culture. Coding assistants iterate:
+push, rebuild, look, repeat.
+
+-   `POST /deployments/:id/redeploy` (scope `deploy:update`): builds the
+    culture again from its source, as a new build in its history. Git:
+    the same ref, fetched again (a branch picks up new commits); an
+    optional `ref` changes it. Allowed from ready, stopped, failed and
+    expired, as the state machine already says.
+-   `POST /deployments/:id/upload` (scope `deploy:update`): the same
+    with a new ZIP archive. It replaces the old one once its version is
+    live, so the running version never loses its source.
+-   Admin panel: **Redeploy** on the culture page (the action the API
+    already lists); the build history lists every build with its
+    commit and result.
+-   The guide describes the loop: push or zip, redeploy, follow,
+    look.
+
+**Decided** (owner, November 2026): the old version keeps answering
+while the new one builds.
+
+-   A ready culture stays `ready` during a redeploy; the new build has
+    its own status (builds already have one), and the culture page
+    shows "building a new version". The new app starts next to the old
+    one on the culture's network, under its own name.
+-   Once the new app passes its health check, the route switches to it
+    and the old app and its image are removed. Until then, each build
+    keeps its own image.
+-   A failed build or health check removes only the new app: the old
+    version keeps running, the culture stays `ready`, and its history
+    says why the new version failed (with the build log, as now).
+-   A culture that isn't running (stopped, failed, expired) has nothing
+    to keep: a redeploy takes the usual path through `queued`.
+-   One build at a time: a redeploy while one is running answers 409.
+
+**Done when:** a pushed change shows up at the same address after
+**Redeploy**, from the admin panel and through the API, and an expired
+culture can be grown again.
+
+### 5.6 Recovery
+
+What happens when things go wrong outside a request: the worker dies
+mid-build, the host restarts, an app crashes for good, or a cleanup
+step fails ("Reconciliation (phase 5) catches leftovers" in
+`deployment-run.ts`).
+
+-   A reconciliation job in the worker (every five minutes, and once at
+    startup) compares the database with Docker, using the containers',
+    networks' and images' petri. labels:
+    -   A culture stuck in a build step longer than its job can live
+        (30 minutes) becomes `failed`: "interrupted".
+    -   A ready culture whose container is gone, or keeps restarting,
+        becomes `failed`, with its last output in the history.
+    -   Containers, networks and images with no culture that should
+        have them are removed (leftovers from failed cleanups).
+-   Everything the job changes is written to the culture's history; a
+    summary goes to the worker's log.
+-   Docker's `unless-stopped` restarts apps after a host restart, and
+    the route sync restores routes; an end-to-end check confirms it.
+
+**Done when:** integration tests that kill the worker mid-build, remove
+a container behind petri.'s back and leave leftovers each end with the
+database and Docker agreeing again.
+
+### 5.7 API polish for coding assistants
+
+Small things that save an assistant requests and guesswork:
+
+-   `GET /api-keys/current` (any key): the calling key's name, scopes
+    and expiry, so an assistant can check what it may do before trying.
+-   `GET /deployments?project=<slug>`: assistants know the experiment's
+    slug, not its id.
+-   `GET /deployments/:id?wait=<seconds>` (at most 60): answers as soon
+    as the status changes, instead of the assistant polling every few
+    seconds.
+-   The guide uses all three.
+
+**Done when:** following the guide, an assistant needs one request to
+check its key, and one request per status change to follow a build.
+
+### 5.8 Buildpacks
+
+Apps without a Dockerfile: detected and built with Cloud Native
+Buildpacks (Paketo), as architecture section 8.3 plans.
+
+-   `build.strategy`: `auto` (a Dockerfile if there is one, else
+    buildpacks), `dockerfile` or `buildpacks`. The build log says which
+    was used and why.
+-   Buildpack images listen on `$PORT`: petri. sets `PORT` (8080 unless
+    `build.port` says otherwise) and uses it for the health check.
+-   **Spike first:** `pack` needs a Docker daemon to run the builder,
+    and the worker only has the restricted socket proxy and BuildKit.
+    Giving builds the Docker daemon would undo the build isolation from
+    2.5 and 3.3. To try instead: Paketo's lifecycle (`creator`) run
+    inside BuildKit from a generated build file, exporting an image
+    archive, as Dockerfile builds do now. The spike decides, with the
+    owner, before the task is built.
+-   The builder image (around 1 GB) is pulled once and kept; the first
+    buildpack build is slow, the next ones reuse its layers.
+
+**Done when:** a Node.js app and a Python app without a Dockerfile grow
+into cultures, under the same limits and network rules as Dockerfile
+builds.
+
+### Not in this phase
+
+-   Runtime environment variables (architecture 8.3): apps that need
+    settings or secrets. Secrets need the storage and encryption review
+    of phase 6, so both come there, together.
 
 ## Phase 6 --- Hardening (outline)
 
 -   Move builds to a separate VM.
--   Secret encryption review.
+-   Runtime environment variables and secrets for apps (deferred from
+    phase 5), with the secret encryption review.
 -   OIDC configuration guide (e.g. Authentik).
 -   Backup and restore procedures.
