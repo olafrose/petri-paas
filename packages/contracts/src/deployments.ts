@@ -194,6 +194,18 @@ export const redeployBody = z
 
 export type RedeployBody = z.infer<typeof redeployBody>;
 
+export const updateDeploymentBody = z
+	.object({
+		lifecycle: lifecycleSettings.meta({
+			description:
+				"`temporary` with `ttlHours` (counted from now) extends it or makes a permanent one temporary again; `permanent` keeps it",
+		}),
+	})
+	.strict()
+	.meta({ id: "UpdateDeployment" });
+
+export type UpdateDeploymentBody = z.infer<typeof updateDeploymentBody>;
+
 export const deployment = z
 	.object({
 		id: z.uuid(),

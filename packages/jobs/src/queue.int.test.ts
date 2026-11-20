@@ -67,6 +67,19 @@ describe("transactional send", () => {
 	});
 });
 
+describe("schedules", () => {
+	test("one schedule per job, replaced when set again", async () => {
+		const queue = await startQueue();
+		await queue.schedule("deployment.expire", "*/5 * * * *", {});
+		await queue.schedule("deployment.expire", "*/5 * * * *", {});
+		const schedules = await queue.boss.getSchedules("deployment.expire");
+		expect(schedules).toMatchObject([
+			{ name: "deployment.expire", cron: "*/5 * * * *" },
+		]);
+		await queue.boss.unschedule("deployment.expire");
+	});
+});
+
 describe("processing", () => {
 	test("a worker completes queued jobs with validated data", async () => {
 		const queue = await startQueue();

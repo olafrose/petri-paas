@@ -244,9 +244,49 @@ export function deploymentStartHandler(
 }
 
 /**
- * Removes everything the deployment ran on: its route, container,
- * network, the images of all its builds and its uploaded archives. The deployment, its
- * builds, history and build logs remain; it ends as `deleted`.
+ * Removes what a deployment ran on: its route, container (and a new
+ * version being grown next to it), network and the images of all its
+ * builds. Anything already gone is skipped. Returns its builds.
+ */
+export async function removeApp(
+	{
+		runtime,
+		edge,
+		settings,
+	}: Pick<Deps, "runtime" | "edge"> & {
+		settings: Pick<DeploymentActionSettings, "workerContainer">;
+	},
+	tx: Transaction,
+	deploymentId: string,
+) {
+	// Left connected if the worker died during a health check; the
+	// network can't be removed while it is.
+	if (settings.workerContainer) {
+		await runtime
+			.disconnect(networkName(deploymentId), settings.workerContainer)
+			.catch(() => {});
+	}
+	// Also takes the edge proxy off the network, which is needed to
+	// remove it.
+	await edge.unpublish(deploymentId);
+	await runtime.removeContainer(deploymentId);
+	// A new version that was being grown next to it (a redeploy).
+	await runtime.removeContainerNamed(nextContainerName(deploymentId));
+	await runtime.removeNetwork(deploymentId);
+	const buildRows = await tx
+		.select({ id: builds.id, source: builds.source })
+		.from(builds)
+		.where(eq(builds.deploymentId, deploymentId));
+	for (const build of buildRows) {
+		await runtime.removeImage(imageName(deploymentId, build.id));
+	}
+	return buildRows;
+}
+
+/**
+ * Removes everything the deployment ran on (`removeApp`) and its
+ * uploaded archives. The deployment, its builds, history and build logs
+ * remain; it ends as `deleted`.
  *
  * Errors are thrown so the job is retried. A deployment job still running
  * notices the deletion and removes whatever it creates itself.
@@ -254,7 +294,7 @@ export function deploymentStartHandler(
 export function deploymentDeleteHandler(
 	deps: Deps,
 ): JobHandler<"deployment.delete"> {
-	const { db, runtime, edge, settings } = deps;
+	const { db, settings } = deps;
 
 	return async (job) => {
 		const { deploymentId } = job.data;
@@ -269,28 +309,8 @@ export function deploymentDeleteHandler(
 				return;
 			}
 
-			// Left connected if the worker died during a health check; the
-			// network can't be removed while it is.
-			if (settings.workerContainer) {
-				await runtime
-					.disconnect(networkName(deploymentId), settings.workerContainer)
-					.catch(() => {});
-			}
-			// Also takes the edge proxy off the network, which is needed to
-			// remove it.
-			await edge.unpublish(deploymentId);
-			await runtime.removeContainer(deploymentId);
-			// A new version that was being grown next to it (a redeploy).
-			await runtime.removeContainerNamed(nextContainerName(deploymentId));
-			await runtime.removeNetwork(deploymentId);
-			const buildRows = await tx
-				.select({ id: builds.id, source: builds.source })
-				.from(builds)
-				.where(eq(builds.deploymentId, deploymentId));
+			const buildRows = await removeApp(deps, tx, deploymentId);
 			const sources = [deployment.source, ...buildRows.map((b) => b.source)];
-			for (const build of buildRows) {
-				await runtime.removeImage(imageName(deploymentId, build.id));
-			}
 			// Each redeploy with a new archive brought its own.
 			for (const source of sources) {
 				if (source?.type !== "zip") continue;

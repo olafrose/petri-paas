@@ -120,6 +120,18 @@ export class JobQueue {
 		);
 	}
 
+	/**
+	 * Sends the job on a cron schedule (UTC), once across all workers.
+	 * Replaces an earlier schedule of the same job.
+	 */
+	async schedule<Name extends JobName>(
+		name: Name,
+		cron: string,
+		data: JobData<Name>,
+	): Promise<void> {
+		await this.#boss.schedule(name, cron, jobs[name].data.parse(data));
+	}
+
 	async getState(name: JobName, id: string) {
 		return (await this.#boss.getJobById(name, id))?.state ?? null;
 	}

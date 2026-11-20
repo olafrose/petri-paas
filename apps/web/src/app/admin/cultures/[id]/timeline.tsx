@@ -39,8 +39,11 @@ export function Timeline({
 					? current
 					: [...current, event],
 			);
-			// Statuses, and the steps of a new batch next to a ready culture.
-			if (event.type === "status" || event.type === "build") router.refresh();
+			// Statuses, the steps of a new batch next to a ready culture, and
+			// a changed lifetime.
+			if (["status", "build", "lifecycle"].includes(event.type)) {
+				router.refresh();
+			}
 		});
 		return () => source.close();
 	}, [deploymentId, router]);

@@ -246,8 +246,8 @@ export function DeployForm({
 					Permanent
 				</label>
 				<span className={styles.soft}>
-					Temporary cultures are removed automatically once expiry is
-					implemented (phase 5).
+					A temporary culture expires when its time is up: its app is removed,
+					its history stays. Extend it on its page.
 				</span>
 			</fieldset>
 
