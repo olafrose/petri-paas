@@ -902,5 +902,51 @@ builds.
 -   Move builds to a separate VM.
 -   Runtime environment variables and secrets for apps (deferred from
     phase 5), with the secret encryption review.
+-   Apps with several containers, from a Compose file (below). Needs the
+    runtime settings first.
 -   OIDC configuration guide (e.g. Authentik).
 -   Backup and restore procedures.
+
+### Apps with several containers (outline)
+
+Some apps are several services: e.g. CMMS-Home is a Next.js `web`, a
+.NET `api` and PostgreSQL (`db`), described in a `docker-compose.yml`.
+petri. stays a lab and a showroom, not a hosting platform: such a
+culture is for trying a version and showing it, and its data may be
+lost.
+
+-   petri. reads the Compose file as a description and creates the
+    containers itself, each with the same fixed security settings as
+    today. It never runs `docker compose`: that needs the whole Docker
+    daemon, which the worker deliberately lacks, and a Compose file can
+    ask for anything (privileged, host network, host paths, the Docker
+    socket).
+-   Accepted: `build` (context, dockerfile, args), `image` (pulled),
+    `command`, `entrypoint`, `environment` with literal values,
+    `depends_on` (start order) and `healthcheck`. Refused, with a clear
+    message: `privileged`, `network_mode`, `pid`, `ipc`, `cap_add`,
+    `devices`, `security_opt`, host paths, `env_file` and `${VAR}`.
+    Host ports are ignored.
+-   Each service runs as `petri-<id>-<service>` on the culture's network,
+    reachable by its service name (`db:5432` works as under Compose).
+-   One service is public: it gets the route and the health check. It
+    is named in an `x-petri` section, or else is the one service no
+    other depends on.
+-   Storage is temporary: named volumes and an `x-petri` list of paths
+    become per-culture scratch space, owned by the user the image runs
+    as, gone when the culture is deleted. Durable data is out of scope.
+-   Settings that are not in the file (e.g. the first administrator's
+    password) come from the runtime settings of this phase.
+-   Limits: a memory budget per culture across its services, shown in
+    `GET /settings`.
+-   Redeploy rebuilds the services built from source and keeps services
+    with storage (the database) running: two databases on one volume
+    would corrupt it.
+-   To check early: PostgreSQL's image changes its data directory's
+    owner and permissions as root before switching users, which may need
+    a capability petri. drops today; and Docker volumes have no size
+    limit, so scratch space needs one of its own.
+
+**Done when:** CMMS-Home grows from its repository, with at most an
+`x-petri` section added to its Compose file, and its web interface
+works at the preview address; a redeploy keeps the database's data.
