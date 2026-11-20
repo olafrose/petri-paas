@@ -9,6 +9,7 @@ import {
 	deploymentStopHandler,
 } from "./deployment-actions.ts";
 import { deploymentLogsHandler } from "./deployment-logs.ts";
+import { deploymentRouteHandler } from "./deployment-route.ts";
 import {
 	type DeploymentRunSettings,
 	deploymentRunHandler,
@@ -53,6 +54,11 @@ export async function registerHandlers(
 	await queue.work(
 		"deployment.delete",
 		withLogging(deps.log, "deployment.delete", deploymentDeleteHandler(deps)),
+		{ concurrency: 2 },
+	);
+	await queue.work(
+		"deployment.route",
+		withLogging(deps.log, "deployment.route", deploymentRouteHandler(deps)),
 		{ concurrency: 2 },
 	);
 	await queue.work(

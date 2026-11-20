@@ -10,6 +10,7 @@ import {
 } from "@petri/database";
 import {
 	changeStatus,
+	DeploymentNotFoundError,
 	InvalidTransitionError,
 	previewUrl,
 	updateStatus,
@@ -24,6 +25,7 @@ import {
 import { eq } from "drizzle-orm";
 import type { Logger } from "pino";
 import type { EdgeRouting } from "../edge-routing.ts";
+import { routableNow } from "../route-sync.ts";
 import {
 	checkHealth,
 	choosePort,
@@ -169,7 +171,7 @@ export function deploymentStartHandler(
 					current = "health_check";
 					note(message);
 				}
-				return { port, deployment };
+				return { port };
 			});
 			if (!started) return;
 
@@ -189,17 +191,20 @@ export function deploymentStartHandler(
 			}
 
 			await runtime.enableRestarts(deploymentId);
-			published = true;
-			const routeId = await edge.publish(started.deployment, started.port);
-			const url = previewUrl(
-				edge.settings.previewBaseUrl,
-				started.deployment.subdomain,
-			);
-			await updateStatus(db, deploymentId, "ready", {
-				message: `Ready at ${url}`,
-				data: { url },
-				expectedFrom: ["health_check"],
-				updates: { routeId },
+			// At the subdomain it has now: the owner may have moved it
+			// during the health check.
+			await withDeploymentLock(db, deploymentId, async (tx) => {
+				const now = await routableNow(tx, deploymentId);
+				if (!now) throw new DeploymentNotFoundError(deploymentId);
+				published = true;
+				const routeId = await edge.publish(now, started.port);
+				const url = previewUrl(edge.settings.previewBaseUrl, now.subdomain);
+				await changeStatus(tx, deploymentId, "ready", {
+					message: `Ready at ${url}`,
+					data: { url },
+					expectedFrom: ["health_check"],
+					updates: { routeId },
+				});
 			});
 			note("Ready");
 			log.info("deployment ready");

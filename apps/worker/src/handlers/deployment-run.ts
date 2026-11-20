@@ -15,6 +15,8 @@ import {
 	deployments,
 } from "@petri/database";
 import {
+	changeStatus,
+	DeploymentNotFoundError,
 	InvalidTransitionError,
 	isBuildStep,
 	previewUrl,
@@ -31,7 +33,8 @@ import {
 } from "@petri/runtime";
 import { and, desc, eq, inArray, ne } from "drizzle-orm";
 import type { Logger } from "pino";
-import type { EdgeRouting } from "../edge-routing.ts";
+import type { EdgeRouting, Routable } from "../edge-routing.ts";
+import { routableNow } from "../route-sync.ts";
 import {
 	imageName as buildImageName,
 	checkHealth,
@@ -242,16 +245,26 @@ async function runQueued(run: Run) {
 			throw new StepFailure(healthy.reason);
 		}
 
-		// Routed only now: a broken app is never reachable.
+		// Routed only now: a broken app is never reachable. Under the
+		// deployment's lock, at the subdomain it has now: the owner may
+		// have moved it meanwhile.
 		await runtime.enableRestarts(deploymentId);
-		created.route = true;
-		const routeId = await edge.publish(deployment, port);
-		const url = previewUrl(edge.settings.previewBaseUrl, deployment.subdomain);
-		await advance("ready", `Ready at ${url}`, {
-			message: "",
-			data: { url },
-			updates: { routeId, source: run.source },
+		const url = await withDeploymentLock(db, deploymentId, async (tx) => {
+			const now = await routableNow(tx, deploymentId);
+			if (!now) throw new DeploymentNotFoundError(deploymentId);
+			created.route = true;
+			const routeId = await edge.publish(now, port);
+			const url = previewUrl(edge.settings.previewBaseUrl, now.subdomain);
+			await changeStatus(tx, deploymentId, "ready", {
+				message: `Ready at ${url}`,
+				data: { url },
+				expectedFrom: [current],
+				updates: { routeId, source: run.source },
+			});
+			return url;
 		});
+		current = "ready";
+		note(`Ready at ${url}`);
 		await db
 			.update(builds)
 			.set({ status: "succeeded", finishedAt: new Date(), imageId })
@@ -316,6 +329,8 @@ async function runNextToReady(run: Run) {
 	const created = { image: false, container: false };
 	let routedToNext = false;
 	let oldRemoved = false;
+	/** The deployment as the switch routed it. */
+	let routed: Routable = deployment;
 
 	const record = async (
 		message: string,
@@ -374,22 +389,21 @@ async function runNextToReady(run: Run) {
 		watch.stop();
 
 		// The switch, holding the deployment's lock: a stop, start or
-		// delete, and the route sync, wait for it.
-		const url = previewUrl(edge.settings.previewBaseUrl, deployment.subdomain);
+		// delete, a move to another subdomain, and the route sync wait
+		// for it. Routed at the subdomain it has now.
 		await withDeploymentLock(db, deploymentId, async (tx) => {
-			const [now] = await tx
-				.select({ status: deployments.status })
-				.from(deployments)
-				.where(eq(deployments.id, deploymentId));
+			const now = await routableNow(tx, deploymentId);
 			if (now?.status !== "ready") throw new Cancelled();
+			routed = now;
+			const url = previewUrl(edge.settings.previewBaseUrl, now.subdomain);
 
 			await runtime.enableRestarts(deploymentId, next);
 			routedToNext = true;
-			await edge.publish(deployment, port, next);
+			await edge.publish(now, port, next);
 			await runtime.removeContainer(deploymentId);
 			oldRemoved = true;
 			await runtime.renameContainer(next, containerName(deploymentId));
-			const routeId = await edge.publish(deployment, port);
+			const routeId = await edge.publish(now, port);
 			routedToNext = false;
 
 			const container = await runtime.inspect(deploymentId);
@@ -423,7 +437,7 @@ async function runNextToReady(run: Run) {
 		}
 		if (routedToNext && previousPort) {
 			await edge
-				.publish(deployment, previousPort)
+				.publish(routed, previousPort)
 				.catch((err) => log.warn({ err }, "restoring the route failed"));
 		}
 		if (created.container) {

@@ -23,6 +23,7 @@ import { BuildHistory } from "./build-history.tsx";
 import { BuildLog } from "./build-log.tsx";
 import { DeploymentActions } from "./deployment-actions.tsx";
 import { LifecycleActions } from "./lifecycle-actions.tsx";
+import { RenameForm } from "./rename-form.tsx";
 import { RuntimeLog } from "./runtime-log.tsx";
 import { Timeline } from "./timeline.tsx";
 
@@ -62,10 +63,10 @@ export default async function DeploymentPage({
 	const newBatchFailed =
 		current.status === "ready" && latestBuild?.status === "failed";
 	const left = timeLeft(current);
-	// The API refuses changes once it expired or is being deleted.
-	const lifecycleChangeable = !["expired", "deleting", "deleted"].includes(
-		current.status,
-	);
+	// The API refuses changes once it is being deleted, and lifecycle
+	// changes once it expired.
+	const renameable = !["deleting", "deleted"].includes(current.status);
+	const lifecycleChangeable = renameable && current.status !== "expired";
 
 	return (
 		<>
@@ -175,6 +176,17 @@ export default async function DeploymentPage({
 					</>
 				)}
 			</dl>
+
+			{renameable && (
+				<RenameForm
+					// Fresh fields after a rename, from here or elsewhere.
+					key={`${current.name}:${current.subdomain}`}
+					id={current.id}
+					name={current.name}
+					subdomain={current.subdomain}
+					url={current.url}
+				/>
+			)}
 
 			<DeploymentActions
 				id={current.id}

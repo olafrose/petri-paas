@@ -41,8 +41,12 @@ export function Timeline({
 					: [...current, event],
 			);
 			// Statuses, the steps of a new batch next to a ready culture, a
-			// changed lifetime, and repairs by the worker.
-			if (["status", "build", "lifecycle", "recovery"].includes(event.type)) {
+			// new name, address or lifetime, and repairs by the worker.
+			if (
+				["status", "build", "rename", "move", "lifecycle", "recovery"].includes(
+					event.type,
+				)
+			) {
 				router.refresh();
 			}
 		});

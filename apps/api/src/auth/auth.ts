@@ -64,6 +64,12 @@ export function createAuth({ db, publicUrl, secret, oidc }: AuthOptions) {
 			storage: "database",
 			customRules: {
 				"/sign-in/email": { window: 60, max: 5 },
+				// The web app checks the session on every page it renders, and
+				// pages being built refresh every few seconds. Better Auth's
+				// counter only resets after 10 quiet seconds, so the default
+				// (100) would lock the owner out of a page left open. Reading
+				// a session reveals nothing without a valid cookie.
+				"/get-session": false,
 			},
 		},
 		advanced: {

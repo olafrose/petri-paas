@@ -9,7 +9,7 @@ import type { PreviewRoute } from "@petri/edge-proxy";
 import { networkName } from "@petri/runtime";
 import { and, desc, eq, inArray } from "drizzle-orm";
 import type { Logger } from "pino";
-import type { EdgeRouting } from "./edge-routing.ts";
+import type { EdgeRouting, Routable } from "./edge-routing.ts";
 import { withDeploymentLock } from "./handlers/deployment-lock.ts";
 
 /**
@@ -67,14 +67,9 @@ export async function syncRoutes(
 		for (const [id, route] of desired) {
 			const current = actual.find((entry) => entry.deploymentId === id);
 			if (current && sameRoute(current, route)) continue;
-			const added = await withDeploymentLock(db, id, async (tx) => {
-				// Read again: a redeploy may have switched to a new version
-				// (and port) while this waited for the lock.
-				const fresh = (await readyRoutes(tx, edge, log, [id])).get(id);
-				if (!fresh) return false;
-				await edge.proxy.setRoute(fresh);
-				return true;
-			});
+			const added = await withDeploymentLock(db, id, (tx) =>
+				routeReady(tx, edge, log, id),
+			);
 			if (added) result.added.push(id);
 		}
 		for (const route of actual) {
@@ -108,6 +103,46 @@ export async function syncRoutes(
 		log.info(result, "edge proxy routes synced");
 	}
 	return result;
+}
+
+/**
+ * Sets the route of a ready deployment as the database has it now: its
+ * subdomain and the port of the version it runs. Call it holding the
+ * deployment's lock (a redeploy may switch versions or ports meanwhile).
+ * Returns whether the deployment is routed.
+ */
+export async function routeReady(
+	tx: Transaction,
+	edge: EdgeRouting,
+	log: Logger,
+	deploymentId: string,
+): Promise<boolean> {
+	const route = (await readyRoutes(tx, edge, log, [deploymentId])).get(
+		deploymentId,
+	);
+	if (!route) return false;
+	await edge.proxy.setRoute(route);
+	return true;
+}
+
+/**
+ * The deployment as it is to be routed now, with its status. Read holding
+ * its lock: the owner may move it to another subdomain at any time (see
+ * deployment-route.ts).
+ */
+export async function routableNow(
+	tx: Transaction,
+	deploymentId: string,
+): Promise<(Routable & { status: DeploymentStatus }) | undefined> {
+	const [row] = await tx
+		.select({
+			id: deployments.id,
+			subdomain: deployments.subdomain,
+			status: deployments.status,
+		})
+		.from(deployments)
+		.where(eq(deployments.id, deploymentId));
+	return row;
 }
 
 /** The route every ready deployment (or only those given) should have. */

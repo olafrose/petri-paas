@@ -286,6 +286,68 @@ test("redeploy a new version to the same address", async ({
 	await expect(statusStamp(page)).toHaveText("deleted", { timeout: 60_000 });
 });
 
+test("rename a culture and move it to another address", async ({
+	page,
+	context,
+}) => {
+	const project = unique("e2e-rename");
+	await page.goto("/admin/cultures/new");
+	await page.getByRole("button", { name: "ZIP upload" }).click();
+	await page.getByLabel("ZIP archive").setInputFiles(fixtureZip("hello"));
+	await page.getByLabel("Experiment").fill(project);
+	await page.getByLabel("Name").fill("typo");
+	await page.getByRole("button", { name: "Grow culture" }).click();
+	await expect(statusStamp(page)).toHaveText("ready", { timeout: 90_000 });
+	const oldUrl = (await page
+		.locator("dd a[target=_blank]")
+		.getAttribute("href")) as string;
+
+	// The new address shows before saving.
+	const subdomain = unique("e2e-moved");
+	await page.getByRole("button", { name: "Rename" }).click();
+	await page.getByLabel("Name").fill("fixed");
+	await page.getByLabel("Subdomain").fill(subdomain);
+	await expect(page.getByText("New address:")).toContainText(`//${subdomain}.`);
+	await page.getByRole("button", { name: "Save" }).click();
+
+	await expect(page.getByRole("heading", { level: 1 })).toHaveText("fixed");
+	await expect(page.getByText('Renamed from "typo" to "fixed"')).toBeVisible();
+	await expect(page.getByText(/^Moved from http/)).toBeVisible();
+	await expectLabWords(page);
+	const newUrl = (await page
+		.locator("dd a[target=_blank]")
+		.getAttribute("href")) as string;
+	expect(newUrl).toContain(`//${subdomain}.`);
+
+	// The worker moves the route within moments.
+	const preview = await context.newPage();
+	await expect(async () => {
+		await preview.goto(newUrl);
+		await expect(preview.getByRole("heading")).toHaveText(
+			"Hello from an end-to-end test",
+			{ timeout: 1000 },
+		);
+	}).toPass({ timeout: 30_000 });
+	await preview.goto(oldUrl);
+	await expect(preview.locator("body")).toHaveText(
+		"No preview at this address.",
+	);
+	await preview.close();
+
+	// Its experiment lists it by its new name.
+	await page
+		.getByRole("link", { name: new RegExp(`EXP-\\d+ ${project}`) })
+		.click();
+	await expect(page.getByRole("heading", { name: "Cultures" })).toBeVisible();
+	await expect(page.getByText("fixed")).toBeVisible();
+	await expect(page.getByText("typo")).toHaveCount(0);
+
+	await page.getByText("fixed").click();
+	page.once("dialog", (dialog) => dialog.accept());
+	await page.getByRole("button", { name: "Delete" }).click();
+	await expect(statusStamp(page)).toHaveText("deleted", { timeout: 60_000 });
+});
+
 test("an experiment with cultures can't be deleted yet", async ({ page }) => {
 	const project = unique("e2e-keep");
 	await page.goto("/admin/cultures/new");
