@@ -62,6 +62,10 @@ export default async function DeploymentPage({
 	const newBatchFailed =
 		current.status === "ready" && latestBuild?.status === "failed";
 	const left = timeLeft(current);
+	// The API refuses changes once it expired or is being deleted.
+	const lifecycleChangeable = !["expired", "deleting", "deleted"].includes(
+		current.status,
+	);
 
 	return (
 		<>
@@ -129,33 +133,33 @@ export default async function DeploymentPage({
 				</dd>
 				<dt>Lifecycle</dt>
 				<dd>
-					{current.lifecycleMode === "permanent" ? (
-						<Label>permanent</Label>
-					) : (
-						<span className={styles.lifecycle}>
-							<Label>temporary</Label>
-							{left ? (
+					<span className={styles.lifecycle}>
+						<Label>{current.lifecycleMode}</Label>
+						{left ? (
+							<span className={styles.soft}>
+								expires in {left}
+								{current.expiresAt && (
+									<>
+										{" "}
+										(<DateStamp date={current.expiresAt} />)
+									</>
+								)}
+							</span>
+						) : (
+							current.status === "expired" && (
 								<span className={styles.soft}>
-									expires in {left}
-									{current.expiresAt && (
-										<>
-											{" "}
-											(<DateStamp date={current.expiresAt} />)
-										</>
-									)}
+									its time was up; Redeploy grows it again
 								</span>
-							) : (
-								current.status === "expired" && (
-									<span className={styles.soft}>
-										its time was up; Redeploy grows it again
-									</span>
-								)
-							)}
-							{left && (
-								<LifecycleActions id={current.id} hours={TTL_HOURS.default} />
-							)}
-						</span>
-					)}
+							)
+						)}
+						{lifecycleChangeable && (
+							<LifecycleActions
+								id={current.id}
+								mode={current.lifecycleMode}
+								hours={TTL_HOURS.default}
+							/>
+						)}
+					</span>
 				</dd>
 				<dt>Created</dt>
 				<dd>

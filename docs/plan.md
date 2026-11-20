@@ -783,7 +783,9 @@ or `{"mode": "permanent"}`) and records the change in the history
 ("Extended: expires in 48 hours"). A redeploy of a culture past its
 time gives it another 48 hours, or it would expire again as soon as it
 is ready. The admin panel shows the time left rounded ("5 hours", "2
-days"); the mark in lists reads "expires in …".
+days"); the mark in lists reads "expires in …". **Keep** is labelled
+**Make permanent**, and a permanent culture offers **Make temporary**
+(48 hours), so the owner can switch either way.
 
 ### 5.5 Redeploy
 

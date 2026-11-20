@@ -6,45 +6,60 @@ import { Button } from "../../../../components/notebook/index.tsx";
 import { apiSend } from "../../../../lib/client-api.ts";
 import styles from "../../dashboard.module.css";
 
+type Change = "extend" | "permanent" | "temporary";
+
+const LABELS: Record<Change, { idle: string; pending: string }> = {
+	extend: { idle: "Extend", pending: "Extending…" },
+	permanent: { idle: "Make permanent", pending: "Making permanent…" },
+	temporary: { idle: "Make temporary", pending: "Making temporary…" },
+};
+
 /**
- * For a temporary culture: Extend gives it another `hours` from now;
- * Keep makes it permanent.
+ * Switches a culture between temporary and permanent. A temporary one
+ * can also be extended. Extending and making temporary both give it
+ * `hours` from now.
  */
-export function LifecycleActions({ id, hours }: { id: string; hours: number }) {
+export function LifecycleActions({
+	id,
+	mode,
+	hours,
+}: {
+	id: string;
+	mode: "temporary" | "permanent";
+	hours: number;
+}) {
 	const router = useRouter();
-	const [pending, setPending] = useState<"extend" | "keep" | null>(null);
+	const [pending, setPending] = useState<Change | null>(null);
 	const [error, setError] = useState<string | null>(null);
 
-	async function change(action: "extend" | "keep") {
-		setPending(action);
+	async function change(to: Change) {
+		setPending(to);
 		setError(null);
 		const result = await apiSend("PATCH", `/api/v1/deployments/${id}`, {
 			lifecycle:
-				action === "extend"
-					? { mode: "temporary", ttlHours: hours }
-					: { mode: "permanent" },
+				to === "permanent"
+					? { mode: "permanent" }
+					: { mode: "temporary", ttlHours: hours },
 		});
 		setPending(null);
 		if (!result.ok) setError(result.message);
 		router.refresh();
 	}
 
+	const offered: Change[] =
+		mode === "temporary" ? ["extend", "permanent"] : ["temporary"];
 	return (
 		<>
-			<Button
-				variant="secondary"
-				onClick={() => change("extend")}
-				disabled={pending !== null}
-			>
-				{pending === "extend" ? "Extending…" : "Extend"}
-			</Button>
-			<Button
-				variant="secondary"
-				onClick={() => change("keep")}
-				disabled={pending !== null}
-			>
-				{pending === "keep" ? "Keeping…" : "Keep"}
-			</Button>
+			{offered.map((to) => (
+				<Button
+					key={to}
+					variant="secondary"
+					onClick={() => change(to)}
+					disabled={pending !== null}
+				>
+					{pending === to ? LABELS[to].pending : LABELS[to].idle}
+				</Button>
+			))}
 			{error && (
 				<span role="alert" className={styles.error}>
 					{error}

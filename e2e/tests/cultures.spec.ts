@@ -175,7 +175,7 @@ test("deploy a ZIP, open it, stop, start and delete it", async ({
 	await expect(page.getByText(project)).toHaveCount(0);
 });
 
-test("a temporary culture shows its time left; extend it, or keep it", async ({
+test("a culture's lifecycle: time left, extend, permanent and back", async ({
 	page,
 }) => {
 	const project = unique("e2e-lifecycle");
@@ -206,12 +206,24 @@ test("a temporary culture shows its time left; extend it, or keep it", async ({
 	await expect(page.getByRole("heading", { name: "Cultures" })).toBeVisible();
 	await expect(page.getByText(/expires in/)).toHaveCount(0);
 
+	// Switch to permanent and back.
 	await page.goto(culture);
-	await page.getByRole("button", { name: "Keep" }).click();
-	await expect(page.locator("dd", { hasText: "permanent" })).toBeVisible();
+	await page.getByRole("button", { name: "Make permanent" }).click();
+	const permanent = page.locator("dd", { hasText: "permanent" });
+	await expect(permanent).toBeVisible();
+	await expect(permanent).not.toContainText("expires in");
 	await expect(page.getByRole("button", { name: "Extend" })).toHaveCount(0);
 	await expect(page.getByText("Kept: permanent, no expiry")).toBeVisible();
 	await expectLabWords(page);
+
+	await page.getByRole("button", { name: "Make temporary" }).click();
+	await expect(lifecycle).toContainText("expires in 48 hours");
+	await expect(
+		page.getByText("Temporary again: expires in 48 hours"),
+	).toBeVisible();
+	await expect(
+		page.getByRole("button", { name: "Make temporary" }),
+	).toHaveCount(0);
 
 	page.once("dialog", (dialog) => dialog.accept());
 	await page.getByRole("button", { name: "Delete" }).click();
