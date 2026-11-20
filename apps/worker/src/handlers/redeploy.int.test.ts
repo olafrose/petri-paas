@@ -38,6 +38,7 @@ import {
 import { testEdge, viaEdge } from "../../test/edge.ts";
 import { syncRoutes } from "../route-sync.ts";
 import { imageName } from "./app-runtime.ts";
+import { deploymentRouteHandler } from "./deployment-route.ts";
 import {
 	type DeploymentRunSettings,
 	deploymentRunHandler,
@@ -85,6 +86,9 @@ const REPOS = [
 	"stop",
 	"expired",
 	"stopped",
+	"moved",
+	"moving",
+	"first",
 ];
 
 let server: TestGitServer;
@@ -458,5 +462,116 @@ describe("a new ZIP archive", { timeout: 120_000 }, () => {
 		expect((await stateOf(app.id)).deployment?.source).toEqual(second.source);
 		expect(second.stored()).toBe(true);
 		expect(first.stored()).toBe(false);
+	});
+});
+
+describe("a culture moved to another subdomain", { timeout: 120_000 }, () => {
+	const NO_PREVIEW = { status: 404, body: "No preview at this address.\n" };
+
+	/** What the API does: the new subdomain, and the job that routes it. */
+	async function move(deploymentId: string) {
+		const subdomain = `m-${randomUUID().slice(0, 8)}`;
+		await db
+			.update(deployments)
+			.set({ subdomain })
+			.where(eq(deployments.id, deploymentId));
+		const route = () =>
+			deploymentRouteHandler({ db, edge, log })({
+				id: randomUUID(),
+				data: { deploymentId },
+				retryCount: 0,
+				signal: new AbortController().signal,
+			});
+		return { subdomain, route };
+	}
+
+	test("answers at its new address, and no longer at the old one", async () => {
+		const app = await grow(git("moved"));
+		const moved = await move(app.id);
+		await moved.route();
+
+		expect(await viaEdge(moved.subdomain)).toEqual({
+			status: 200,
+			body: "v1\n",
+		});
+		expect(await viaEdge(app.subdomain)).toEqual(NO_PREVIEW);
+		// The route sync agrees.
+		const sync = await syncRoutes(db, edge, log);
+		expect(sync.added).not.toContain(app.id);
+		expect(sync.removed).not.toContain(app.id);
+	});
+
+	test("a redeploy running meanwhile switches to the new address", async () => {
+		const app = await grow(git("moving"));
+		server.push("moving", { Dockerfile: site("v2", { slow: true }) });
+		const { run } = await redeploy(app.id);
+		const running = run();
+		await vi.waitFor(
+			async () =>
+				expect((await stateOf(app.id)).steps).toContain(
+					"New batch: building image",
+				),
+			{ timeout: 30_000, interval: 200 },
+		);
+		const moved = await move(app.id);
+		await moved.route();
+		// The current batch moved; the new one follows it.
+		expect(await viaEdge(moved.subdomain)).toEqual({
+			status: 200,
+			body: "v1\n",
+		});
+		await running;
+
+		expect(await viaEdge(moved.subdomain)).toEqual({
+			status: 200,
+			body: "v2\n",
+		});
+		expect(await viaEdge(app.subdomain)).toEqual(NO_PREVIEW);
+		expect((await stateOf(app.id)).steps.at(-1)).toBe(
+			`Ready at http://${moved.subdomain}.app.localhost:8088/ with the new batch`,
+		);
+	});
+
+	test("a first build moved before it is ready goes live at the new address", async () => {
+		const [project] = await db
+			.insert(projects)
+			.values({ name: "Demo", slug: `demo-${randomUUID().slice(0, 8)}` })
+			.returning();
+		const subdomain = `r-${randomUUID().slice(0, 8)}`;
+		const [deployment] = await db
+			.insert(deployments)
+			.values({
+				projectId: project?.id as string,
+				name: "main",
+				subdomain,
+				source: git("first"),
+				lifecycleMode: "permanent",
+			})
+			.returning();
+		const id = deployment?.id as string;
+		grown.push(id);
+		server.push("first", { Dockerfile: site("v1", { slow: true }) });
+		const [build] = await db
+			.insert(builds)
+			.values({ deploymentId: id, source: git("first") })
+			.returning();
+		const running = handler()(jobFor(id, build?.id as string));
+		await vi.waitFor(
+			async () =>
+				expect((await stateOf(id)).deployment?.status).toBe("building"),
+			{ timeout: 30_000, interval: 200 },
+		);
+		const moved = await move(id);
+		// Not ready yet: nothing to route.
+		await moved.route();
+		await running;
+
+		const state = await stateOf(id);
+		expect(state.deployment?.status).toBe("ready");
+		expect(await viaEdge(moved.subdomain)).toEqual({
+			status: 200,
+			body: "v1\n",
+		});
+		expect(await viaEdge(subdomain)).toEqual(NO_PREVIEW);
 	});
 });

@@ -751,6 +751,17 @@ exists, or removing one that is already gone, succeeds without side
 effects. Because petri. owns the edge proxy, routes can be rebuilt from
 the database at any time.
 
+### 10.2 Moving a preview
+
+The owner may give a deployment another subdomain
+(`PATCH /deployments/:id`). The API saves it and queues
+`deployment.route`; the worker, under the deployment's lock, replaces
+the route in place (it is keyed by the deployment, not the hostname),
+so the old address stops answering in the same step. Everything that
+publishes a route (the first build, a start, a redeploy's switch, the
+route sync) reads the subdomain under the same lock, so a move made
+while one of them runs is never undone by it.
+
 ------------------------------------------------------------------------
 
 ## 11. Deployment orchestration
@@ -946,8 +957,9 @@ A few things save them requests and guesswork:
     the project's id.
 -   `GET /deployments/:id?wait=<seconds>` (at most 60) answers as soon
     as the deployment changes, instead of polling. Every answer about
-    one deployment has a weak `ETag` over its status and its latest
-    build (id and status); the client sends the last one as
+    one deployment has a weak `ETag` over its status, its latest
+    build (id, status and commit), its name and its URL (a rename), and its
+    lifetime (mode and expiry); the client sends the last one as
     `If-None-Match`, so a change between two requests isn't missed.
     Nothing changed in time: 304. The request is woken by the
     deployment's live events, and checks every 2 seconds for changes
@@ -1049,7 +1061,8 @@ time had run out.
 
 `PATCH /deployments/:id` extends a temporary deployment (a new
 `ttlHours`, counted from now, at most 720), makes it permanent or
-temporary again; not once it is expired, deleting or deleted.
+temporary again; not once it is expired, deleting or deleted. The same
+request renames it or moves its preview (section 10.2).
 
 ### Permanent
 

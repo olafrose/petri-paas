@@ -152,6 +152,35 @@ describe("PATCH /deployments/:id", () => {
 		expect(missing.statusCode).toBe(400);
 	});
 
+	test("a waiting request answers when it is extended; old tags are stale", async () => {
+		const created = await deploymentIn("ready");
+		const url = `/api/v1/deployments/${created.id}`;
+		const tag = (await ctx.inject({ url })).headers.etag as string;
+		const waiting = ctx.inject({
+			url: `${url}?wait=30`,
+			headers: { "if-none-match": tag },
+		});
+		await new Promise((resolve) => setTimeout(resolve, 200));
+		await ctx.inject(patch(created.id, { mode: "temporary", ttlHours: 72 }));
+
+		const answer = await waiting;
+		expect(answer.statusCode).toBe(200);
+		expectHoursFromNow(answer.json<Deployment>().expiresAt, 72);
+		expect(answer.headers.etag).not.toBe(tag);
+		const again = await ctx.inject({ url, headers: { "if-none-match": tag } });
+		expect(again.statusCode).toBe(200);
+
+		// Permanent: the mode and the expiry change.
+		const extended = answer.headers.etag as string;
+		await ctx.inject(patch(created.id, { mode: "permanent" }));
+		const kept = await ctx.inject({
+			url,
+			headers: { "if-none-match": extended },
+		});
+		expect(kept.statusCode).toBe(200);
+		expect(kept.json<Deployment>().expiresAt).toBeNull();
+	});
+
 	test("an unknown deployment is 404", async () => {
 		const response = await ctx.inject(patch(UNKNOWN_ID, { mode: "permanent" }));
 		expect(response.statusCode).toBe(404);

@@ -363,6 +363,27 @@ describe("following a deployment", () => {
 		});
 	});
 
+	test("?wait notices the commit a Git build fetched", async () => {
+		const response = await create(minimal);
+		const { id } = response.json<Deployment>();
+		const [waited] = await Promise.all([
+			ctx.inject({
+				url: `/api/v1/deployments/${id}?wait=30`,
+				headers: { "if-none-match": response.headers.etag as string },
+			}),
+			// As the worker stores it after fetching: no event, no status.
+			ctx.db.execute(
+				sql`update builds set commit = 'abc123' where deployment_id = ${id}`,
+			),
+		]);
+		expect(waited.statusCode).toBe(200);
+		expect(waited.json<Deployment>()).toMatchObject({
+			status: "queued",
+			latestBuild: { status: "queued", commit: "abc123" },
+		});
+		expect(waited.headers.etag).not.toBe(response.headers.etag);
+	});
+
 	test("?wait answers 304 when nothing changes in time", async () => {
 		const response = await create(minimal);
 		const { id } = response.json<Deployment>();

@@ -121,12 +121,23 @@ function toBuild(row: DeploymentRow, build: BuildRow): BuildSummary {
 
 /**
  * The deployment's entity tag: it changes with the status or the latest
- * build (a new one, or its status), what someone following a build
- * waits for. Weak, since other fields may change under the same tag.
+ * build (a new one, its status, or the commit a Git build fetched),
+ * what someone following a build waits for, and with its name, address or lifetime: a 304 must not
+ * leave anyone with an old URL or expiry. Weak, since other fields may
+ * change under the same tag.
  */
 export function followTag(deployment: Deployment): string {
 	const build = deployment.latestBuild;
-	const state = [deployment.status, build?.id, build?.status].join(" ");
+	const state = JSON.stringify([
+		deployment.status,
+		build?.id,
+		build?.status,
+		build?.commit,
+		deployment.name,
+		deployment.url,
+		deployment.lifecycleMode,
+		deployment.expiresAt,
+	]);
 	const hash = createHash("sha256").update(state).digest("base64url");
 	return `W/"${hash.slice(0, 16)}"`;
 }
@@ -352,85 +363,170 @@ async function performAction(
 	return toDeployment(row, latest.get(row.id), previewBaseUrl);
 }
 
-/** An expired deployment is grown again first; the others are gone. */
-const LIFECYCLE_FIXED: readonly DeploymentStatus[] = [
-	"expired",
-	"deleting",
-	"deleted",
-];
+/** Gone, or on the way: nothing about them changes any more. */
+const UNCHANGEABLE: readonly DeploymentStatus[] = ["deleting", "deleted"];
+
+/** A history entry for one of the changes, published live too. */
+interface ChangeEntry {
+	type: "rename" | "move" | "lifecycle";
+	message: string;
+	data: Record<string, unknown>;
+}
 
 /**
- * Changes how long the deployment lives: a new expiry counted from now,
- * or none (permanent). Recorded in its history.
+ * Changes the deployment's name, subdomain or lifetime, each recorded in
+ * its history. A new subdomain moves the preview: the worker routes a
+ * ready deployment there (`deployment.route`), and the old address is
+ * free for another deployment.
  */
-export async function updateLifecycle(
-	{ db, previewBaseUrl }: DeploymentDeps,
+export async function updateDeployment(
+	{ db, jobs, previewBaseUrl }: DeploymentDeps,
 	deploymentId: string,
-	lifecycle: UpdateDeploymentBody["lifecycle"],
+	change: UpdateDeploymentBody,
 	principal: Principal | null,
 ): Promise<Deployment> {
-	const row = await withTransaction(db, async (tx) => {
-		const [current] = await tx
-			.select()
-			.from(deployments)
-			.where(eq(deployments.id, deploymentId))
-			.for("update");
-		if (!current) throw new ApiError(404, "not_found", "Deployment not found");
-		if (LIFECYCLE_FIXED.includes(current.status)) {
+	try {
+		const row = await withTransaction(db, async (tx) => {
+			const [current] = await tx
+				.select()
+				.from(deployments)
+				.where(eq(deployments.id, deploymentId))
+				.for("update");
+			if (!current) {
+				throw new ApiError(404, "not_found", "Deployment not found");
+			}
+			if (UNCHANGEABLE.includes(current.status)) {
+				throw new ApiError(
+					409,
+					"conflict",
+					`A deployment that is "${current.status}" cannot be changed`,
+				);
+			}
+			if (change.lifecycle && current.status === "expired") {
+				throw new ApiError(
+					409,
+					"conflict",
+					"This deployment has expired: redeploy it, then change its lifecycle",
+				);
+			}
+
+			const by = requestedBy(principal);
+			const updates: Partial<typeof deployments.$inferInsert> = {};
+			const entries: ChangeEntry[] = [];
+			if (change.name !== undefined && change.name !== current.name) {
+				updates.name = change.name;
+				entries.push({
+					type: "rename",
+					message: `Renamed from "${current.name}" to "${change.name}"`,
+					data: { from: current.name, to: change.name, requestedBy: by },
+				});
+			}
+			if (
+				change.subdomain !== undefined &&
+				change.subdomain !== current.subdomain
+			) {
+				updates.subdomain = change.subdomain;
+				const from = previewUrl(previewBaseUrl, current.subdomain);
+				const to = previewUrl(previewBaseUrl, change.subdomain);
+				entries.push({
+					type: "move",
+					message: `Moved from ${from} to ${to}`,
+					data: {
+						from: current.subdomain,
+						to: change.subdomain,
+						url: to,
+						requestedBy: by,
+					},
+				});
+			}
+			if (change.lifecycle) {
+				entries.push(lifecycleChange(current, change.lifecycle, updates, by));
+			}
+			if (entries.length === 0) return current;
+
+			const [updated] = await tx
+				.update(deployments)
+				.set(updates)
+				.where(eq(deployments.id, deploymentId))
+				.returning();
+			if (!updated) throw new Error("update returned no row");
+
+			for (const entry of entries) {
+				const [event] = await tx
+					.insert(deploymentEvents)
+					.values({ deploymentId, ...entry })
+					.returning({ id: deploymentEvents.id });
+				if (!event) throw new Error("insert returned no row");
+				await publishEvent(tx, {
+					type: `deployment.${entry.type}`,
+					deploymentId,
+					eventId: event.id,
+					message: entry.message,
+				});
+			}
+			// Whatever the status: a build or start about to publish the
+			// route reads the subdomain under the deployment's lock, and
+			// the job, waiting for that lock, catches one that read it
+			// just before this commits.
+			if (updates.subdomain !== undefined) {
+				await jobs.send(
+					"deployment.route",
+					{ deploymentId },
+					{ transaction: tx },
+				);
+			}
+			return updated;
+		});
+		const latest = await latestBuilds(db, [row.id]);
+		return toDeployment(row, latest.get(row.id), previewBaseUrl);
+	} catch (error) {
+		if (isConstraintViolation(error, "deployments_subdomain_unique")) {
 			throw new ApiError(
 				409,
 				"conflict",
-				current.status === "expired"
-					? "This deployment has expired: redeploy it, then change its lifecycle"
-					: `A deployment that is "${current.status}" cannot be changed`,
+				`The subdomain "${change.subdomain}" is already in use`,
 			);
 		}
+		throw error;
+	}
+}
 
-		const expiresAt =
-			lifecycle.mode === "temporary"
-				? new Date(Date.now() + lifecycle.ttlHours * HOUR_MS)
-				: null;
-		const [updated] = await tx
-			.update(deployments)
-			.set({ lifecycleMode: lifecycle.mode, expiresAt })
-			.where(eq(deployments.id, deploymentId))
-			.returning();
-		if (!updated) throw new Error("update returned no row");
+/**
+ * A new expiry counted from now, or none (permanent): sets it in
+ * `updates` and returns its history entry.
+ */
+function lifecycleChange(
+	current: DeploymentRow,
+	lifecycle: NonNullable<UpdateDeploymentBody["lifecycle"]>,
+	updates: Partial<typeof deployments.$inferInsert>,
+	by: ReturnType<typeof requestedBy>,
+): ChangeEntry {
+	const expiresAt =
+		lifecycle.mode === "temporary"
+			? new Date(Date.now() + lifecycle.ttlHours * HOUR_MS)
+			: null;
+	updates.lifecycleMode = lifecycle.mode;
+	updates.expiresAt = expiresAt;
 
-		const hours =
-			lifecycle.mode === "temporary"
-				? `${lifecycle.ttlHours} hour${lifecycle.ttlHours === 1 ? "" : "s"}`
-				: "";
-		const message =
-			lifecycle.mode === "permanent"
-				? "Kept: permanent, no expiry"
-				: current.lifecycleMode === "permanent"
-					? `Temporary again: expires in ${hours}`
-					: `Extended: expires in ${hours}`;
-		const [event] = await tx
-			.insert(deploymentEvents)
-			.values({
-				deploymentId,
-				type: "lifecycle",
-				message,
-				data: {
-					lifecycleMode: lifecycle.mode,
-					expiresAt: expiresAt?.toISOString() ?? null,
-					requestedBy: requestedBy(principal),
-				},
-			})
-			.returning({ id: deploymentEvents.id });
-		if (!event) throw new Error("insert returned no row");
-		await publishEvent(tx, {
-			type: "deployment.lifecycle",
-			deploymentId,
-			eventId: event.id,
-			message,
-		});
-		return updated;
-	});
-	const latest = await latestBuilds(db, [row.id]);
-	return toDeployment(row, latest.get(row.id), previewBaseUrl);
+	const hours =
+		lifecycle.mode === "temporary"
+			? `${lifecycle.ttlHours} hour${lifecycle.ttlHours === 1 ? "" : "s"}`
+			: "";
+	const message =
+		lifecycle.mode === "permanent"
+			? "Kept: permanent, no expiry"
+			: current.lifecycleMode === "permanent"
+				? `Temporary again: expires in ${hours}`
+				: `Extended: expires in ${hours}`;
+	return {
+		type: "lifecycle",
+		message,
+		data: {
+			lifecycleMode: lifecycle.mode,
+			expiresAt: expiresAt?.toISOString() ?? null,
+			requestedBy: by,
+		},
+	};
 }
 
 /** What a redeploy changes: the Git ref, or the archive (ZIP). */
@@ -732,7 +828,7 @@ export const deploymentRoutes: FastifyPluginAsyncZod<
 				tags,
 				summary: "Get a deployment",
 				description: [
-					"The `ETag` header changes with the status and the latest build (a new one, or its status).",
+					"The `ETag` header changes with the status, the latest build (a new one, its status, or its commit), the name or `url` (a rename), and the lifetime (`lifecycleMode`, `expiresAt`).",
 					"",
 					"`wait=<seconds>` (at most 60) follows a build without polling: the answer comes as soon as the tag differs from `If-None-Match` (send the `ETag` of the previous answer), or from the tag when the request arrived if there is none. If nothing changes in time, 304 with the same tag; ask again. The server answers after 55 seconds at the latest.",
 					"",
@@ -853,11 +949,15 @@ export const deploymentRoutes: FastifyPluginAsyncZod<
 			config: { access: { scope: "deploy:update" } },
 			schema: {
 				tags,
-				summary: "Change a deployment's lifecycle",
+				summary: "Change a deployment's name, subdomain or lifecycle",
 				description: [
-					"Extends a temporary deployment (`ttlHours` from now, at most 720), makes it permanent, or temporary again.",
+					"Send any of the fields; each change goes into the history.",
 					"",
-					"Not for deployments that are `expired` (redeploy first; that gives it another 48 hours), `deleting` or `deleted`: 409.",
+					"`name` and `subdomain` follow the same rules as when creating one; a subdomain in use is 409. A new subdomain moves the preview: a `ready` deployment answers there within seconds and no longer at the old address, which is free for another deployment.",
+					"",
+					"`lifecycle` extends a temporary deployment (`ttlHours` from now, at most 720), makes it permanent, or temporary again. Not for `expired` deployments: redeploy first, which gives it another 48 hours.",
+					"",
+					"Not for deployments that are `deleting` or `deleted`: 409.",
 				].join("\n"),
 				params: idParams,
 				body: updateDeploymentBody,
@@ -870,10 +970,10 @@ export const deploymentRoutes: FastifyPluginAsyncZod<
 			},
 		},
 		async (request, reply) => {
-			const result = await updateLifecycle(
+			const result = await updateDeployment(
 				deps,
 				request.params.id,
-				request.body.lifecycle,
+				request.body,
 				request.principal,
 			);
 			return sendDeployment(reply, 200, result);

@@ -56,6 +56,21 @@ export const jobs = {
 			deleteAfterSeconds: 7 * 24 * 60 * 60,
 		},
 	},
+	/**
+	 * Routes a ready deployment at its current subdomain, after the owner
+	 * changed it. The route keeps its id, so the old address goes with it.
+	 */
+	"deployment.route": {
+		data: z.object({ deploymentId: z.uuid() }),
+		queue: {
+			// The route sync puts it right a few minutes later at worst.
+			retryLimit: 3,
+			retryDelay: 5,
+			expireInSeconds: 2 * 60,
+			retentionSeconds: 7 * 24 * 60 * 60,
+			deleteAfterSeconds: 7 * 24 * 60 * 60,
+		},
+	},
 	/** Removes a deployment's container, network and images. */
 	"deployment.delete": {
 		data: z.object({ deploymentId: z.uuid() }),

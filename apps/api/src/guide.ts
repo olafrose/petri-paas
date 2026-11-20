@@ -100,7 +100,7 @@ export const GUIDE_ENDPOINTS: GuideEndpoint[] = [
 		method: "PATCH",
 		path: "/api/v1/deployments/:id",
 		access: { scope: "deploy:update" },
-		text: 'Extend it (`{"lifecycle": {"mode": "temporary", "ttlHours": 48}}`)',
+		text: 'Rename, move or extend it (`{"name": ...}`, `{"subdomain": ...}`, `{"lifecycle": {"mode": "temporary", "ttlHours": 48}}`)',
 	},
 	{
 		method: "POST",
@@ -267,6 +267,10 @@ curl -X POST ${api}/deployments/upload \\
 
   A redeploy grows an expired culture again, for another
   ${TTL_HOURS.default} hours.
+- The same request renames a culture (\`{"name": "<new name>"}\`) or
+  moves it to another address (\`{"subdomain": "<new-subdomain>"}\`):
+  a ready culture answers there within seconds, and no longer at the
+  old address. Rename instead of growing a new culture for a typo.
 - \`build.args\` are stored in the image: never put secrets there.
 - Check \`GET ${api}/settings\` before uploading: it lists the size,
   time and memory limits.
@@ -284,7 +288,9 @@ curl -si "${api}/deployments/<id>?wait=60" \\
 \`\`\`
 
 Every answer about a culture (also the one that created it) has an
-\`ETag\` header, which changes with \`status\` and \`latestBuild\`. Send
+\`ETag\` header, which changes with \`status\`, \`latestBuild\`, and
+\`name\` or \`url\` when the culture is renamed or moved, and
+\`lifecycleMode\` or \`expiresAt\` when its lifetime changes. Send
 the last one you got as \`If-None-Match\`: the answer comes as soon as
 the culture differs from it, with the new state and a new \`ETag\`, or
 after a minute as **304** (nothing changed; ask again). Keep the

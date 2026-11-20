@@ -196,12 +196,30 @@ export type RedeployBody = z.infer<typeof redeployBody>;
 
 export const updateDeploymentBody = z
 	.object({
-		lifecycle: lifecycleSettings.meta({
+		name: z
+			.string()
+			.trim()
+			.min(1)
+			.max(100)
+			.optional()
+			.meta({ description: "A new display name" }),
+		subdomain: dnsLabel.optional().meta({
+			description:
+				"A new preview subdomain: the preview moves there, and the old address is free for another deployment",
+		}),
+		lifecycle: lifecycleSettings.optional().meta({
 			description:
 				"`temporary` with `ttlHours` (counted from now) extends it or makes a permanent one temporary again; `permanent` keeps it",
 		}),
 	})
 	.strict()
+	.refine(
+		(body) =>
+			body.name !== undefined ||
+			body.subdomain !== undefined ||
+			body.lifecycle !== undefined,
+		"Send name, subdomain or lifecycle",
+	)
 	.meta({ id: "UpdateDeployment" });
 
 export type UpdateDeploymentBody = z.infer<typeof updateDeploymentBody>;

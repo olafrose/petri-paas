@@ -940,6 +940,19 @@ no longer at the old one, its history says so, and a redeploy running
 meanwhile switches to the new address (integration tests); renaming
 from the culture page works end to end.
 
+**Decided:** history entries of type `rename` and `move`; the same
+name or subdomain changes nothing and records nothing. An expired
+culture can be renamed (only its lifecycle waits for a redeploy). The
+API queues `deployment.route` for every move, whatever the status; the
+worker routes only a ready culture. The first build and a start now
+also publish the route under the culture's lock, reading the subdomain
+there, as a redeploy's switch does: a move during the health check
+can't be overwritten with the old address. The `ETag` of 5.7 also
+covers the name, the URL, the lifetime (mode and expiry) and the
+latest build's commit: a 304 never leaves a client with outdated data,
+and `?wait` reports a move or an extension. A Git build thus answers
+once more, when its commit is known.
+
 ### 5.8 Buildpacks
 
 Apps without a Dockerfile: detected and built with Cloud Native
