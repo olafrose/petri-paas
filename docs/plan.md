@@ -901,6 +901,18 @@ Small things that save an assistant requests and guesswork:
 **Done when:** following the guide, an assistant needs one request to
 check its key, and one request per status change to follow a build.
 
+**Decided:** `GET /api-keys/current` is open to any key, whatever its
+scopes (a new access rule, `apiKey`); a signed-in owner gets 403. A
+change is one of the status or the latest build (a new one, or its
+status), so a redeploy of a ready culture can be followed too. Every
+answer about one culture carries a weak `ETag` over these; sent back as
+`If-None-Match`, `?wait` answers as soon as the culture differs from
+it, so a change between two requests isn't missed, and with 304 if
+nothing changed in time. The API answers after 55 seconds at the
+latest, within NPM's one-minute timeout, and the web app's forwarding
+of `/api/v1` now waits 70 seconds instead of Next.js's 30. The
+end-to-end test follows a ZIP build this way, with no 304 and no
+answer equal to the one before.
 ### 5.7.1 Renaming cultures
 
 A culture's name and preview address are fixed when it is grown. A

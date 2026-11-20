@@ -938,6 +938,24 @@ Where to start is described for them in `GET /api/v1/guide` (also at
 `/llms.txt`): a short Markdown guide to access, growing a culture,
 following it, and the ground rules. 401 answers link to it.
 
+A few things save them requests and guesswork:
+
+-   `GET /api-keys/current`, open to any key whatever its scopes: the
+    calling key's name, scopes and expiry, to check before trying.
+-   `GET /deployments?project=<slug>`: assistants know the slug, not
+    the project's id.
+-   `GET /deployments/:id?wait=<seconds>` (at most 60) answers as soon
+    as the deployment changes, instead of polling. Every answer about
+    one deployment has a weak `ETag` over its status and its latest
+    build (id and status); the client sends the last one as
+    `If-None-Match`, so a change between two requests isn't missed.
+    Nothing changed in time: 304. The request is woken by the
+    deployment's live events, and checks every 2 seconds for changes
+    that publish none (a build's status). It answers after 55 seconds
+    at the latest: NPM gives up on a silent upstream after a minute.
+    The web app forwards `/api/v1` with a proxy timeout of 70 seconds
+    (Next.js's default is 30).
+
 ------------------------------------------------------------------------
 
 ## 13. Dashboard and public showcase
