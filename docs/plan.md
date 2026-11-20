@@ -796,7 +796,7 @@ while the new one builds.
 
 -   A ready culture stays `ready` during a redeploy; the new build has
     its own status (builds already have one), and the culture page
-    shows "building a new version". The new app starts next to the old
+    shows "growing a new batch". The new app starts next to the old
     one on the culture's network, under its own name.
 -   Once the new app passes its health check, the route switches to it
     and the old app and its image are removed. Until then, each build
