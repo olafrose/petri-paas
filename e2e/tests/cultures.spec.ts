@@ -175,6 +175,49 @@ test("deploy a ZIP, open it, stop, start and delete it", async ({
 	await expect(page.getByText(project)).toHaveCount(0);
 });
 
+test("a temporary culture shows its time left; extend it, or keep it", async ({
+	page,
+}) => {
+	const project = unique("e2e-lifecycle");
+	await page.goto("/admin/cultures/new");
+	await page.getByRole("button", { name: "ZIP upload" }).click();
+	await page.getByLabel("ZIP archive").setInputFiles(fixtureZip("hello"));
+	await page.getByLabel("Experiment").fill(project);
+	await page.locator("input[name=ttlHours]").fill("5");
+	await page.getByRole("button", { name: "Grow culture" }).click();
+	await expect(page).toHaveURL(/\/admin\/cultures\/[0-9a-f-]+$/);
+	const culture = page.url();
+	const lifecycle = page.locator("dd", { hasText: "temporary" });
+	await expect(lifecycle).toContainText("expires in 5 hours");
+
+	// The experiment marks it: it expires within a day.
+	await page
+		.getByRole("link", { name: new RegExp(`EXP-\\d+ ${project}`) })
+		.click();
+	await expect(page.getByText("expires in 5 hours")).toBeVisible();
+
+	await page.goto(culture);
+	await page.getByRole("button", { name: "Extend" }).click();
+	await expect(lifecycle).toContainText("expires in 48 hours");
+	await expect(page.getByText("Extended: expires in 48 hours")).toBeVisible();
+	await page
+		.getByRole("link", { name: new RegExp(`EXP-\\d+ ${project}`) })
+		.click();
+	await expect(page.getByRole("heading", { name: "Cultures" })).toBeVisible();
+	await expect(page.getByText(/expires in/)).toHaveCount(0);
+
+	await page.goto(culture);
+	await page.getByRole("button", { name: "Keep" }).click();
+	await expect(page.locator("dd", { hasText: "permanent" })).toBeVisible();
+	await expect(page.getByRole("button", { name: "Extend" })).toHaveCount(0);
+	await expect(page.getByText("Kept: permanent, no expiry")).toBeVisible();
+	await expectLabWords(page);
+
+	page.once("dialog", (dialog) => dialog.accept());
+	await page.getByRole("button", { name: "Delete" }).click();
+	await expect(statusStamp(page)).toHaveText("deleted", { timeout: 60_000 });
+});
+
 test("redeploy a new version to the same address", async ({
 	page,
 	context,

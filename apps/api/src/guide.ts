@@ -91,6 +91,12 @@ export const GUIDE_ENDPOINTS: GuideEndpoint[] = [
 		text: "Its builds, newest first, with commit and result",
 	},
 	{
+		method: "PATCH",
+		path: "/api/v1/deployments/:id",
+		access: { scope: "deploy:update" },
+		text: 'Extend it (`{"lifecycle": {"mode": "temporary", "ttlHours": 48}}`)',
+	},
+	{
 		method: "POST",
 		path: "/api/v1/deployments/:id/redeploy",
 		access: { scope: "deploy:update" },
@@ -229,6 +235,18 @@ curl -X POST ${api}/deployments/upload \\
 - \`lifecycle\` defaults to temporary, ${TTL_HOURS.default} hours
   (\`{"mode": "temporary", "ttlHours": 72}\`, at most ${TTL_HOURS.max}).
   Use \`{"mode": "permanent"}\` only if your user asks.
+- A temporary culture **expires** at \`expiresAt\`: its app is removed
+  and its status becomes \`expired\`; the history stays. To keep it
+  longer, extend it, counted from now:
+
+  \`\`\`sh
+  curl -X PATCH ${api}/deployments/<id> \\
+    -H "Authorization: Bearer $PETRI_KEY" -H 'content-type: application/json' \\
+    -d '{"lifecycle": {"mode": "temporary", "ttlHours": 48}}'
+  \`\`\`
+
+  A redeploy grows an expired culture again, for another
+  ${TTL_HOURS.default} hours.
 - \`build.args\` are stored in the image: never put secrets there.
 - Check \`GET ${api}/settings\` before uploading: it lists the size,
   time and memory limits.

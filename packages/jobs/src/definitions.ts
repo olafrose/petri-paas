@@ -72,6 +72,20 @@ export const jobs = {
 		},
 	},
 	/**
+	 * Expires temporary deployments past their time and removes what they
+	 * ran on (see the worker's expiry.ts). Scheduled every five minutes;
+	 * the next run picks up whatever this one couldn't finish.
+	 */
+	"deployment.expire": {
+		data: z.object({}),
+		queue: {
+			retryLimit: 0,
+			expireInSeconds: 4 * 60,
+			retentionSeconds: 24 * 60 * 60,
+			deleteAfterSeconds: 24 * 60 * 60,
+		},
+	},
+	/**
 	 * Writes the last lines of a deployment's app output to the logs
 	 * volume (see runtime-logs.ts), for the API, which has no Docker
 	 * access. Someone is waiting for the answer: no retries, and an old

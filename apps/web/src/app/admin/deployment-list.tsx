@@ -1,9 +1,12 @@
 import type { Deployment } from "@petri/contracts";
-import { StatusStamp } from "../../components/notebook/index.tsx";
-import { sourceLabel } from "../../lib/deployments.ts";
+import { MarginNote, StatusStamp } from "../../components/notebook/index.tsx";
+import { expiresSoon, sourceLabel, timeLeft } from "../../lib/deployments.ts";
 import styles from "./dashboard.module.css";
 
-/** A project's deployments: status, name (to its page), source, Open. */
+/**
+ * A project's deployments: status, name (to its page), source, a mark
+ * if it expires within a day, Open.
+ */
 export function DeploymentList({ deployments }: { deployments: Deployment[] }) {
 	return (
 		<ul className={styles.deployments}>
@@ -17,6 +20,9 @@ export function DeploymentList({ deployments }: { deployments: Deployment[] }) {
 						{deployment.name}
 					</a>
 					<span className={styles.source}>{sourceLabel(deployment)}</span>
+					{expiresSoon(deployment) && (
+						<MarginNote>expires in {timeLeft(deployment)}</MarginNote>
+					)}
 					{deployment.status === "ready" && (
 						<a
 							className={styles.open}

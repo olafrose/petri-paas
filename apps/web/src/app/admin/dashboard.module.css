@@ -146,6 +146,13 @@
 	overflow-wrap: anywhere;
 }
 
+.lifecycle {
+	display: inline-flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: var(--space-2);
+}
+
 .actions {
 	display: flex;
 	flex-wrap: wrap;

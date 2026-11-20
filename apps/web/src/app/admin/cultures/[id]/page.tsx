@@ -3,6 +3,7 @@ import {
 	deployment,
 	deploymentEventList,
 	project,
+	TTL_HOURS,
 } from "@petri/contracts";
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
@@ -15,12 +16,13 @@ import {
 	StatusStamp,
 } from "../../../../components/notebook/index.tsx";
 import { ApiRequestError, apiGet } from "../../../../lib/api.ts";
-import { isActive } from "../../../../lib/deployments.ts";
+import { isActive, timeLeft } from "../../../../lib/deployments.ts";
 import { requestCookie } from "../../../../lib/session.ts";
 import styles from "../../dashboard.module.css";
 import { BuildHistory } from "./build-history.tsx";
 import { BuildLog } from "./build-log.tsx";
 import { DeploymentActions } from "./deployment-actions.tsx";
+import { LifecycleActions } from "./lifecycle-actions.tsx";
 import { RuntimeLog } from "./runtime-log.tsx";
 import { Timeline } from "./timeline.tsx";
 
@@ -59,6 +61,7 @@ export default async function DeploymentPage({
 		latestBuild?.status === "queued" || latestBuild?.status === "running";
 	const newBatchFailed =
 		current.status === "ready" && latestBuild?.status === "failed";
+	const left = timeLeft(current);
 
 	return (
 		<>
@@ -129,14 +132,29 @@ export default async function DeploymentPage({
 					{current.lifecycleMode === "permanent" ? (
 						<Label>permanent</Label>
 					) : (
-						<>
-							<Label>temporary</Label>{" "}
-							{current.expiresAt && (
+						<span className={styles.lifecycle}>
+							<Label>temporary</Label>
+							{left ? (
 								<span className={styles.soft}>
-									until <DateStamp date={current.expiresAt} />
+									expires in {left}
+									{current.expiresAt && (
+										<>
+											{" "}
+											(<DateStamp date={current.expiresAt} />)
+										</>
+									)}
 								</span>
+							) : (
+								current.status === "expired" && (
+									<span className={styles.soft}>
+										its time was up; Redeploy grows it again
+									</span>
+								)
 							)}
-						</>
+							{left && (
+								<LifecycleActions id={current.id} hours={TTL_HOURS.default} />
+							)}
+						</span>
 					)}
 				</dd>
 				<dt>Created</dt>

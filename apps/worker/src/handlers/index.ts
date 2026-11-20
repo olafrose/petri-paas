@@ -13,6 +13,7 @@ import {
 	type DeploymentRunSettings,
 	deploymentRunHandler,
 } from "./deployment-run.ts";
+import { deploymentExpireHandler } from "./expiry.ts";
 import { pingHandler } from "./ping.ts";
 
 /** Registers a handler for every job type the worker processes. */
@@ -52,6 +53,10 @@ export async function registerHandlers(
 		"deployment.delete",
 		withLogging(deps.log, "deployment.delete", deploymentDeleteHandler(deps)),
 		{ concurrency: 2 },
+	);
+	await queue.work(
+		"deployment.expire",
+		withLogging(deps.log, "deployment.expire", deploymentExpireHandler(deps)),
 	);
 	// Someone waits for these: polled often, never behind a build.
 	await queue.work(

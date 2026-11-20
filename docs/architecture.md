@@ -988,20 +988,26 @@ Deployments support two lifecycle modes.
 
 A temporary deployment has an expiration timestamp.
 
-The cleanup worker runs periodically, for example every five minutes,
-and checks for expired deployments.
+The worker's expiry job (`deployment.expire`, a pg-boss schedule every
+five minutes) looks for temporary deployments past `expires_at` that
+are `ready`, `stopped` or `failed`, with no build queued or running.
 
-Cleanup procedure:
+Cleanup procedure, each under the deployment's lock:
 
-1.  Mark deployment as `DELETING`.
-2.  Remove the corresponding edge proxy route.
-3.  Stop the application container.
-4.  Remove the container.
-5.  Remove only explicitly temporary deployment resources.
-6.  Retain deployment metadata, events and build history.
-7.  Mark deployment as `EXPIRED`.
+1.  Mark the deployment `EXPIRED` (checked again under the lock: it may
+    have been extended meanwhile), with a history entry.
+2.  Remove its edge proxy route, container (and a new version being
+    grown next to it), network and the images of its builds.
+3.  Clear its container, image and route ids. An expired deployment
+    that still has one is cleaned up again by the next run.
 
-The user should be able to extend the expiration time.
+Deployment metadata, events, builds, build logs and the uploaded
+archive stay: a redeploy grows it again, with another 48 hours if its
+time had run out.
+
+`PATCH /deployments/:id` extends a temporary deployment (a new
+`ttlHours`, counted from now, at most 720), makes it permanent or
+temporary again; not once it is expired, deleting or deleted.
 
 ### Permanent
 

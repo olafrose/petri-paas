@@ -772,6 +772,19 @@ within five minutes and is shown as expired with its history intact;
 an extended or permanent one keeps running (integration tests with the
 time moved, end-to-end test for the buttons).
 
+**Decided:** the job (`deployment.expire`) also skips a culture with a
+build queued or running, such as a ready one growing a new batch; the
+next run takes it. Expiring commits first; removing the app follows,
+and a removal that fails is tried again by the next run (the expired
+culture still records a container, image or route). The removal is the
+delete job's, minus the uploads (`removeApp`). `PATCH` takes the
+creation form's `lifecycle` (`{"mode": "temporary", "ttlHours": …}`
+or `{"mode": "permanent"}`) and records the change in the history
+("Extended: expires in 48 hours"). A redeploy of a culture past its
+time gives it another 48 hours, or it would expire again as soon as it
+is ready. The admin panel shows the time left rounded ("5 hours", "2
+days"); the mark in lists reads "expires in …".
+
 ### 5.5 Redeploy
 
 Today a new version means a new culture. Coding assistants iterate:

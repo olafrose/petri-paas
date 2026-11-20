@@ -13,11 +13,15 @@ import {
 	idParams,
 	listDeploymentsQuery,
 	redeployBody,
+	TTL_HOURS,
+	type UpdateDeploymentBody,
+	updateDeploymentBody,
 } from "@petri/contracts";
 import {
 	builds,
 	type Database,
 	type DeploymentSource,
+	type DeploymentStatus,
 	deploymentEvents,
 	deployments,
 	isConstraintViolation,
@@ -303,6 +307,87 @@ async function performAction(
 	return toDeployment(row, latest.get(row.id), previewBaseUrl);
 }
 
+/** An expired deployment is grown again first; the others are gone. */
+const LIFECYCLE_FIXED: readonly DeploymentStatus[] = [
+	"expired",
+	"deleting",
+	"deleted",
+];
+
+/**
+ * Changes how long the deployment lives: a new expiry counted from now,
+ * or none (permanent). Recorded in its history.
+ */
+export async function updateLifecycle(
+	{ db, previewBaseUrl }: DeploymentDeps,
+	deploymentId: string,
+	lifecycle: UpdateDeploymentBody["lifecycle"],
+	principal: Principal | null,
+): Promise<Deployment> {
+	const row = await withTransaction(db, async (tx) => {
+		const [current] = await tx
+			.select()
+			.from(deployments)
+			.where(eq(deployments.id, deploymentId))
+			.for("update");
+		if (!current) throw new ApiError(404, "not_found", "Deployment not found");
+		if (LIFECYCLE_FIXED.includes(current.status)) {
+			throw new ApiError(
+				409,
+				"conflict",
+				current.status === "expired"
+					? "This deployment has expired: redeploy it, then change its lifecycle"
+					: `A deployment that is "${current.status}" cannot be changed`,
+			);
+		}
+
+		const expiresAt =
+			lifecycle.mode === "temporary"
+				? new Date(Date.now() + lifecycle.ttlHours * HOUR_MS)
+				: null;
+		const [updated] = await tx
+			.update(deployments)
+			.set({ lifecycleMode: lifecycle.mode, expiresAt })
+			.where(eq(deployments.id, deploymentId))
+			.returning();
+		if (!updated) throw new Error("update returned no row");
+
+		const hours =
+			lifecycle.mode === "temporary"
+				? `${lifecycle.ttlHours} hour${lifecycle.ttlHours === 1 ? "" : "s"}`
+				: "";
+		const message =
+			lifecycle.mode === "permanent"
+				? "Kept: permanent, no expiry"
+				: current.lifecycleMode === "permanent"
+					? `Temporary again: expires in ${hours}`
+					: `Extended: expires in ${hours}`;
+		const [event] = await tx
+			.insert(deploymentEvents)
+			.values({
+				deploymentId,
+				type: "lifecycle",
+				message,
+				data: {
+					lifecycleMode: lifecycle.mode,
+					expiresAt: expiresAt?.toISOString() ?? null,
+					requestedBy: requestedBy(principal),
+				},
+			})
+			.returning({ id: deploymentEvents.id });
+		if (!event) throw new Error("insert returned no row");
+		await publishEvent(tx, {
+			type: "deployment.lifecycle",
+			deploymentId,
+			eventId: event.id,
+			message,
+		});
+		return updated;
+	});
+	const latest = await latestBuilds(db, [row.id]);
+	return toDeployment(row, latest.get(row.id), previewBaseUrl);
+}
+
 /** What a redeploy changes: the Git ref, or the archive (ZIP). */
 export type RedeployChange =
 	| { ref?: string | undefined }
@@ -359,11 +444,24 @@ export async function redeployDeployment(
 			.values({ deploymentId, source })
 			.returning();
 		if (!build) throw new Error("insert returned no row");
+		// Grown again after its time ran out: another default lifetime, or
+		// it would expire again as soon as it is ready.
+		const renewed =
+			current.expiresAt && current.expiresAt.getTime() <= Date.now()
+				? new Date(Date.now() + TTL_HOURS.default * HOUR_MS)
+				: null;
+		if (renewed) {
+			await tx
+				.update(deployments)
+				.set({ expiresAt: renewed })
+				.where(eq(deployments.id, deploymentId));
+		}
 		const data = {
 			action: "redeploy",
 			buildId: build.id,
 			requestedBy: requestedBy(principal),
 			...("ref" in change && change.ref && { ref: change.ref }),
+			...(renewed && { expiresAt: renewed.toISOString() }),
 		};
 		if (current.status === "ready") {
 			await recordBuildEvent(tx, deploymentId, {
@@ -606,6 +704,37 @@ export const deploymentRoutes: FastifyPluginAsyncZod<DeploymentDeps> = async (
 		response: { 202: deployment, 404: errorResponse, 409: errorResponse },
 	});
 
+	app.patch(
+		"/deployments/:id",
+		{
+			config: { access: { scope: "deploy:update" } },
+			schema: {
+				tags,
+				summary: "Change a deployment's lifecycle",
+				description: [
+					"Extends a temporary deployment (`ttlHours` from now, at most 720), makes it permanent, or temporary again.",
+					"",
+					"Not for deployments that are `expired` (redeploy first; that gives it another 48 hours), `deleting` or `deleted`: 409.",
+				].join("\n"),
+				params: idParams,
+				body: updateDeploymentBody,
+				response: {
+					200: deployment,
+					400: errorResponse,
+					404: errorResponse,
+					409: errorResponse,
+				},
+			},
+		},
+		async (request) =>
+			updateLifecycle(
+				deps,
+				request.params.id,
+				request.body.lifecycle,
+				request.principal,
+			),
+	);
+
 	app.post(
 		"/deployments/:id/redeploy",
 		{
@@ -616,7 +745,7 @@ export const deploymentRoutes: FastifyPluginAsyncZod<DeploymentDeps> = async (
 					[
 						"Builds the deployment again from its source, as a new build in its history: Git fetches the ref again (a branch picks up new commits), or `ref` changes it. For a new ZIP archive, use the upload endpoint.",
 						"",
-						"A `ready` deployment stays `ready` and keeps answering while the new version builds; `latestBuild` follows the new build, and the deployment switches to it once it passes its health check. If it fails, the old version keeps running. From `stopped`, `failed` or `expired`, the deployment goes through `queued` as on its first build.",
+						"A `ready` deployment stays `ready` and keeps answering while the new version builds; `latestBuild` follows the new build, and the deployment switches to it once it passes its health check. If it fails, the old version keeps running. From `stopped`, `failed` or `expired`, the deployment goes through `queued` as on its first build. A temporary deployment past its time gets another 48 hours.",
 						"",
 						"One build at a time: 409 while one is queued or running.",
 					].join("\n"),

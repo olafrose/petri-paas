@@ -64,6 +64,8 @@ await registerHandlers(queue, {
 		workerContainer: config.WORKER_CONTAINER,
 	},
 });
+// Every five minutes, once across all workers.
+await queue.schedule("deployment.expire", "*/5 * * * *", {});
 log.info("worker started");
 
 for (const signal of ["SIGINT", "SIGTERM"] as const) {
