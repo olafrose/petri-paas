@@ -107,6 +107,7 @@ jobs:
             --read-only --tmpfs /tmp \
             -e XDG_DATA_HOME=/tmp/data -e XDG_CONFIG_HOME=/tmp/config \
             --cap-drop ALL --security-opt no-new-privileges:true \
+            --sysctl net.ipv4.tcp_migrate_req=1 \
             -v "$PWD/infrastructure/caddy/edge.json:/etc/caddy/edge.json:ro" \
             -v "$PWD/.tools/edge:/run/petri-edge" \
             -p 127.0.0.1:8088:8080 \

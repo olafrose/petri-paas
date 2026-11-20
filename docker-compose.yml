@@ -158,6 +158,11 @@ services:
       XDG_CONFIG_HOME: /tmp/config
     cap_drop: [ALL]
     security_opt: ["no-new-privileges:true"]
+    # Every route change makes Caddy open a new listening socket and close
+    # the old one; this hands connections waiting on the old socket to the
+    # new one instead of resetting them (Linux 5.14+).
+    sysctls:
+      net.ipv4.tcp_migrate_req: 1
     ports:
       # Bind to the address NPM reaches.
       - "${EDGE_BIND:-127.0.0.1}:${EDGE_PORT:-8080}:8080"

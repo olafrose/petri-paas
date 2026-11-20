@@ -68,7 +68,9 @@ create the `pb-build` network.
 ## 1. Prepare the VM
 
 Debian 13 (as tested; Ubuntu 24.04 should work too: both use cgroup v2,
-which enforces the apps' memory limits, and nftables). Install Docker
+which enforces the apps' memory limits, and nftables). The kernel must
+be 5.14 or newer: the edge proxy sets `net.ipv4.tcp_migrate_req`, so
+route changes don't reset visitors' connections. Install Docker
 Engine and its Compose plugin from Docker's own repository
 (<https://docs.docker.com/engine/install/>), then:
 
