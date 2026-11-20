@@ -72,6 +72,9 @@ services:
       XDG_CONFIG_HOME: /tmp/config
     cap_drop: [ALL]
     security_opt: ["no-new-privileges:true"]
+    # As in docker-compose.yml: no resets when routes change.
+    sysctls:
+      net.ipv4.tcp_migrate_req: 1
     ports:
       - "127.0.0.1:8088:8080"
     volumes:
