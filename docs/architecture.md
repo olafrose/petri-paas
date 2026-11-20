@@ -791,8 +791,32 @@ The worker should:
 -   Clean up resources created by incomplete operations.
 -   Avoid duplicate containers or proxy routes on retries.
 
-A periodic reconciliation job should compare database state with actual
-Docker and edge proxy state.
+The worker's reconciliation job (`deployment.reconcile`, a pg-boss
+schedule every five minutes, and once when the worker starts) compares
+the database with Docker, by the labels on petri.'s containers and
+networks and the `petri/<deployment>:<build>` tags of its images:
+
+-   A deployment in a build step for longer than its job can live (30
+    minutes) was interrupted (the worker died): it becomes `FAILED`, its
+    unfinished builds fail, and their workspaces are removed. A new
+    batch next to a ready deployment fails the same way; the ready
+    version keeps running.
+-   A ready deployment whose container is gone fails at once. One whose
+    app isn't running fails if it still isn't at the next run (right
+    after a host restart, Docker may not have started it yet); its app's
+    last output goes into the history, and the container is stopped
+    and kept for its logs.
+-   Containers, networks and images no deployment should have are
+    removed: anything of an expired or deleted deployment, and of any
+    other a new-batch container without an unfinished build, and images
+    that neither its containers run nor an unfinished build loads.
+    Resources of deployments the database doesn't know are only logged:
+    on a development machine, test runs share Docker with databases of
+    their own.
+
+Every change goes into the deployment's history (as a status change, or
+an entry of type `recovery`); a summary goes to the worker's log. Routes
+are reconciled separately, every 30 seconds (section 10.1).
 
 ### 11.3 Redeploy
 
@@ -1252,7 +1276,6 @@ intervention.
 -   Review resource limits.
 -   Document configuring an OIDC provider.
 -   Improve secret handling.
--   Add reconciliation and failure recovery.
 -   Document backup and restore procedures.
 
 **Result:** A safer and more reliable self-hosted platform.

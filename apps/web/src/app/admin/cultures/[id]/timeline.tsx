@@ -3,6 +3,7 @@
 import type { DeploymentEvent } from "@petri/contracts";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
+import { LogView } from "../../../../components/notebook/index.tsx";
 import styles from "../../dashboard.module.css";
 
 /**
@@ -39,9 +40,9 @@ export function Timeline({
 					? current
 					: [...current, event],
 			);
-			// Statuses, the steps of a new batch next to a ready culture, and
-			// a changed lifetime.
-			if (["status", "build", "lifecycle"].includes(event.type)) {
+			// Statuses, the steps of a new batch next to a ready culture, a
+			// changed lifetime, and repairs by the worker.
+			if (["status", "build", "lifecycle", "recovery"].includes(event.type)) {
 				router.refresh();
 			}
 		});
@@ -54,7 +55,12 @@ export function Timeline({
 	return (
 		<ol className={styles.timeline}>
 			{events.map((event) => {
-				const data = event.data as { to?: string; failed?: boolean } | null;
+				const data = event.data as {
+					to?: string;
+					failed?: boolean;
+					/** The app's last output, when it crashed. */
+					output?: string;
+				} | null;
 				const failed = data?.to === "failed" || data?.failed === true;
 				return (
 					<li key={event.id} className={styles.event}>
@@ -63,9 +69,16 @@ export function Timeline({
 								? new Date(event.createdAt).toLocaleTimeString("en-GB")
 								: ""}
 						</time>
-						<span className={failed ? styles.eventFailed : undefined}>
-							{event.message}
-						</span>
+						<div>
+							<span className={failed ? styles.eventFailed : undefined}>
+								{event.message}
+							</span>
+							{data?.output && (
+								<div className={styles.eventOutput}>
+									<LogView text={data.output} />
+								</div>
+							)}
+						</div>
 					</li>
 				);
 			})}

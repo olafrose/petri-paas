@@ -130,12 +130,17 @@ pids="$pids $!"
 wait_for "http://localhost:$WEB_PORT/login" web
 
 export E2E_BASE_URL="http://localhost:$WEB_PORT"
+# For the restart test (e2e/tests/recovery.spec.ts): the edge proxy's
+# container, restarted through the Docker socket proxy.
+DOCKER_PROXY_URL=$(printf '%s' "${DOCKER_PROXY_HOST:-tcp://127.0.0.1:2375}" | sed 's|^tcp:|http:|')
+export DOCKER_PROXY_URL EDGE_CONTAINER="${EDGE_CONTAINER:-petri-dev-edge-1}"
 if [ "${E2E_BROWSER:-docker}" = local ]; then
 	(cd e2e && pnpm exec playwright test "$@")
 else
 	docker run --rm --network host --ipc host \
 		--user "$(id -u):$(id -g)" -e HOME=/tmp \
 		-e E2E_BASE_URL -e E2E_OWNER_EMAIL -e E2E_OWNER_PASSWORD \
+		-e DOCKER_PROXY_URL -e EDGE_CONTAINER \
 		-v "$repo:$repo" -w "$repo/e2e" "$PLAYWRIGHT_IMAGE" \
 		../node_modules/.bin/playwright test "$@"
 fi

@@ -866,6 +866,24 @@ step fails ("Reconciliation (phase 5) catches leftovers" in
 a container behind petri.'s back and leave leftovers each end with the
 database and Docker agreeing again.
 
+**Decided** (building it): the job is `deployment.reconcile`. A build
+step's start is the culture's last status change; `queued` is left
+out, since a long queue isn't stuck. A new batch whose build has run
+for 30 minutes fails too, and the ready version stays. An app that
+isn't running fails only if it still isn't at the next run, five
+minutes later: right after a host restart Docker may not have started
+it yet. A container that is gone fails the culture at once. A crashed
+app's container is stopped and kept, for its logs; the culture page
+shows its last output under the history entry. Images carry no labels
+(BuildKit makes them), so they are found by their `petri/<culture>:<build>`
+tag. Resources of cultures the database doesn't know are logged, not
+removed: on the development machine, test runs and the dev worker share
+one Docker with databases of their own. Repairs that don't change the
+status are history entries of type `recovery`. A real reboot can't be
+part of a test run: the end-to-end check lets an app exit by itself
+(Docker starts it again) and restarts the edge proxy's container (the
+route sync restores its routes).
+
 ### 5.7 API polish for coding assistants
 
 Small things that save an assistant requests and guesswork:

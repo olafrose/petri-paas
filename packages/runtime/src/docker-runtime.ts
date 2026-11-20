@@ -62,6 +62,8 @@ export interface ContainerState {
 	oomKilled: boolean;
 	error: string;
 	buildId: string | null;
+	/** How often Docker restarted it since it was last started. */
+	restartCount: number;
 	/** "no" until the app passed its health check, then "unless-stopped". */
 	restartPolicy: string;
 	/** IP address per network name. */
@@ -88,6 +90,7 @@ interface InspectResponse {
 		OOMKilled: boolean;
 		Error: string;
 	};
+	RestartCount: number;
 	HostConfig: { RestartPolicy: { Name: string } };
 	NetworkSettings: { Networks: Record<string, { IPAddress: string }> | null };
 }
@@ -398,6 +401,7 @@ export class DockerRuntime {
 			oomKilled: body.State.OOMKilled,
 			error: body.State.Error,
 			buildId: body.Config.Labels?.[LABELS.build] ?? null,
+			restartCount: body.RestartCount,
 			restartPolicy: body.HostConfig.RestartPolicy.Name,
 			addresses: Object.fromEntries(
 				Object.entries(body.NetworkSettings.Networks ?? {}).map(
@@ -405,6 +409,80 @@ export class DockerRuntime {
 				),
 			),
 		};
+	}
+
+	/**
+	 * Every container petri. created (by its labels), running or not.
+	 * Other containers on the host are never listed.
+	 */
+	async listContainers(): Promise<ManagedResource[]> {
+		const { body } = await this.#docker.call<
+			{
+				Names: string[];
+				Labels: Record<string, string> | null;
+			}[]
+		>("GET", "/containers/json", {
+			query: { all: true, filters: { label: [`${LABELS.managed}=true`] } },
+		});
+		return body.flatMap((container) => {
+			const deploymentId = container.Labels?.[LABELS.deployment];
+			const name = container.Names[0]?.replace(/^\//, "");
+			if (!deploymentId || !name) return [];
+			return [
+				{
+					name,
+					deploymentId,
+					buildId: container.Labels?.[LABELS.build] ?? null,
+				},
+			];
+		});
+	}
+
+	/** Every network petri. created (by its labels). */
+	async listNetworks(): Promise<ManagedResource[]> {
+		const { body } = await this.#docker.call<
+			{ Name: string; Labels: Record<string, string> | null }[]
+		>("GET", "/networks", {
+			query: { filters: { label: [`${LABELS.managed}=true`] } },
+		});
+		return body.flatMap((network) => {
+			const deploymentId = network.Labels?.[LABELS.deployment];
+			if (!deploymentId) return [];
+			return [
+				{
+					name: network.Name,
+					deploymentId,
+					buildId: null,
+				},
+			];
+		});
+	}
+
+	/**
+	 * Every image of a build, by its tag: images come from BuildKit
+	 * without petri.'s labels.
+	 */
+	async listImages(): Promise<ManagedResource[]> {
+		const { body } = await this.#docker.call<{ RepoTags: string[] | null }[]>(
+			"GET",
+			"/images/json",
+			{
+				query: { filters: { reference: ["petri/*"] } },
+			},
+		);
+		return body.flatMap((image) =>
+			(image.RepoTags ?? []).flatMap((tag) => {
+				const match = IMAGE_TAG.exec(tag);
+				if (!match?.[1] || !match[2]) return [];
+				return [
+					{
+						name: tag,
+						deploymentId: match[1],
+						buildId: match[2],
+					},
+				];
+			}),
+		);
 	}
 
 	/** The last lines of the container's output. */
@@ -421,6 +499,18 @@ export class DockerRuntime {
 		return demultiplex(Buffer.concat(await collect(response)));
 	}
 }
+
+/** A container, network or image petri. created, as listed by Docker. */
+export interface ManagedResource {
+	/** The container's or network's name, or the image's tag. */
+	name: string;
+	deploymentId: string;
+	/** The build it runs (containers) or was built by (images). */
+	buildId: string | null;
+}
+
+/** `petri/<deployment id>:<build id>` (see the worker's `imageName`). */
+const IMAGE_TAG = /^petri\/([0-9a-f-]{36}):([0-9a-f-]{36})$/;
 
 /** The container-create request. The only place security settings are set. */
 export function createBody(spec: ContainerSpec) {

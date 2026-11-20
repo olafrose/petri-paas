@@ -86,6 +86,20 @@ export const jobs = {
 		},
 	},
 	/**
+	 * Compares the database with Docker and repairs what went wrong
+	 * outside a request (see the worker's reconcile.ts). Scheduled every
+	 * five minutes and sent once when the worker starts.
+	 */
+	"deployment.reconcile": {
+		data: z.object({}),
+		queue: {
+			retryLimit: 0,
+			expireInSeconds: 4 * 60,
+			retentionSeconds: 24 * 60 * 60,
+			deleteAfterSeconds: 24 * 60 * 60,
+		},
+	},
+	/**
 	 * Writes the last lines of a deployment's app output to the logs
 	 * volume (see runtime-logs.ts), for the API, which has no Docker
 	 * access. Someone is waiting for the answer: no retries, and an old
