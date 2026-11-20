@@ -10,7 +10,7 @@ type Change = "extend" | "permanent" | "temporary";
 
 const LABELS: Record<Change, { idle: string; pending: string }> = {
 	extend: { idle: "Extend", pending: "Extending…" },
-	permanent: { idle: "Make permanent", pending: "Making permanent…" },
+	permanent: { idle: "Keep", pending: "Keeping…" },
 	temporary: { idle: "Make temporary", pending: "Making temporary…" },
 };
 

@@ -208,7 +208,7 @@ test("a culture's lifecycle: time left, extend, permanent and back", async ({
 
 	// Switch to permanent and back.
 	await page.goto(culture);
-	await page.getByRole("button", { name: "Make permanent" }).click();
+	await page.getByRole("button", { name: "Keep" }).click();
 	const permanent = page.locator("dd", { hasText: "permanent" });
 	await expect(permanent).toBeVisible();
 	await expect(permanent).not.toContainText("expires in");
