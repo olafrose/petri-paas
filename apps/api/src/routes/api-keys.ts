@@ -32,7 +32,10 @@ export function toApiKey(row: ApiKeyRow): ApiKey {
 
 export const DAY_MS = 24 * 60 * 60 * 1000;
 
-/** API key management. Owner only: keys cannot manage keys. */
+/**
+ * API key management. Owner only: keys cannot manage keys, but each may
+ * look at itself.
+ */
 export const apiKeyRoutes: FastifyPluginAsyncZod<{ db: Database }> = async (
 	app,
 	{ db },
@@ -87,6 +90,30 @@ export const apiKeyRoutes: FastifyPluginAsyncZod<{ db: Database }> = async (
 				.from(apiKeys)
 				.orderBy(desc(apiKeys.createdAt), desc(apiKeys.id));
 			return { items: rows.map(toApiKey) };
+		},
+	);
+
+	app.get(
+		"/api-keys/current",
+		{
+			config: { access: "apiKey" },
+			schema: {
+				tags,
+				summary: "The API key making this request",
+				description:
+					"Its name, scopes and expiry, so a coding assistant can check what it may do before trying. Any key may ask; a signed-in owner gets 403.",
+				response: { 200: apiKey },
+			},
+		},
+		async (request) => {
+			const principal = request.principal;
+			if (principal?.type !== "apiKey") throw new Error("not an API key");
+			const [row] = await db
+				.select()
+				.from(apiKeys)
+				.where(eq(apiKeys.id, principal.apiKeyId));
+			if (!row) throw new Error(`API key ${principal.apiKeyId} vanished`);
+			return toApiKey(row);
 		},
 	);
 

@@ -119,7 +119,13 @@ export async function buildApp({
 		db,
 		uploadsDir: uploads.uploadsDir,
 	});
-	await app.register(deploymentRoutes, { prefix, db, jobs, previewBaseUrl });
+	await app.register(deploymentRoutes, {
+		prefix,
+		db,
+		jobs,
+		previewBaseUrl,
+		events,
+	});
 	await app.register(deploymentLiveRoutes, {
 		prefix,
 		db,

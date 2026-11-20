@@ -5,6 +5,7 @@ import type {
 	ErrorResponse,
 	ProjectList,
 } from "@petri/contracts";
+import { updateStatus } from "@petri/deployment-core";
 import { sql } from "drizzle-orm";
 import { describe, expect, test } from "vitest";
 import { useTestApp } from "../../test/app.ts";
@@ -234,6 +235,16 @@ describe("reading deployments", () => {
 		expect(byProject.json<DeploymentList>().items.map((d) => d.id)).toEqual([
 			a.id,
 		]);
+		const bySlug = await ctx.inject({
+			url: "/api/v1/deployments?project=other",
+		});
+		expect(bySlug.json<DeploymentList>().items.map((d) => d.id)).toEqual([
+			b.id,
+		]);
+		const unknown = await ctx.inject({
+			url: "/api/v1/deployments?project=nothing",
+		});
+		expect(unknown.json<DeploymentList>().items).toEqual([]);
 
 		const ready = await ctx.inject({ url: "/api/v1/deployments?status=ready" });
 		expect(ready.json<DeploymentList>().items).toEqual([]);
@@ -259,6 +270,117 @@ describe("reading deployments", () => {
 			.items;
 		const after = await ctx.inject({ url: `${url}?after=${first?.id}` });
 		expect(after.json<DeploymentEventList>().items).toEqual([]);
+	});
+});
+
+describe("following a deployment", () => {
+	/** Moves the deployment on after a moment, as the worker would. */
+	function advanceSoon(id: string, ms = 300) {
+		return new Promise<void>((resolve, reject) => {
+			setTimeout(() => {
+				updateStatus(ctx.db, id, "cloning", { message: "Cloning" }).then(
+					() => resolve(),
+					reject,
+				);
+			}, ms);
+		});
+	}
+
+	test("answers carry a tag; an unchanged one answers 304", async () => {
+		const response = await create(minimal);
+		const tag = response.headers.etag as string;
+		expect(tag).toMatch(/^W\/"[\w-]+"$/);
+		const url = `/api/v1/deployments/${response.json<Deployment>().id}`;
+
+		const same = await ctx.inject({ url, headers: { "if-none-match": tag } });
+		expect(same.statusCode).toBe(304);
+		expect(same.headers.etag).toBe(tag);
+
+		const other = await ctx.inject({
+			url,
+			headers: { "if-none-match": 'W/"older"' },
+		});
+		expect(other.statusCode).toBe(200);
+		expect(other.headers.etag).toBe(tag);
+	});
+
+	test("?wait answers as soon as the status changes", async () => {
+		const response = await create(minimal);
+		const { id } = response.json<Deployment>();
+		const started = Date.now();
+		const [waited] = await Promise.all([
+			ctx.inject({
+				url: `/api/v1/deployments/${id}?wait=30`,
+				headers: { "if-none-match": response.headers.etag as string },
+			}),
+			advanceSoon(id),
+		]);
+		expect(waited.statusCode).toBe(200);
+		expect(waited.json<Deployment>().status).toBe("cloning");
+		expect(waited.headers.etag).not.toBe(response.headers.etag);
+		// Woken by the event, not by the poll or the time running out.
+		expect(Date.now() - started).toBeLessThan(1900);
+	});
+
+	test("?wait with an old tag answers at once", async () => {
+		const response = await create(minimal);
+		const { id } = response.json<Deployment>();
+		await advanceSoon(id, 0);
+		const started = Date.now();
+		const waited = await ctx.inject({
+			url: `/api/v1/deployments/${id}?wait=30`,
+			headers: { "if-none-match": response.headers.etag as string },
+		});
+		expect(waited.json<Deployment>().status).toBe("cloning");
+		expect(Date.now() - started).toBeLessThan(1000);
+	});
+
+	test("?wait without a tag waits for the next change", async () => {
+		const { id } = (await create(minimal)).json<Deployment>();
+		const [waited] = await Promise.all([
+			ctx.inject({ url: `/api/v1/deployments/${id}?wait=30` }),
+			advanceSoon(id),
+		]);
+		expect(waited.json<Deployment>().status).toBe("cloning");
+	});
+
+	test("?wait notices a new build, though the status stays", async () => {
+		const response = await create(minimal);
+		const { id } = response.json<Deployment>();
+		const [waited] = await Promise.all([
+			ctx.inject({
+				url: `/api/v1/deployments/${id}?wait=30`,
+				headers: { "if-none-match": response.headers.etag as string },
+			}),
+			// No event: found by polling.
+			ctx.db.execute(
+				sql`update builds set status = 'running' where deployment_id = ${id}`,
+			),
+		]);
+		expect(waited.json<Deployment>()).toMatchObject({
+			status: "queued",
+			latestBuild: { status: "running" },
+		});
+	});
+
+	test("?wait answers 304 when nothing changes in time", async () => {
+		const response = await create(minimal);
+		const { id } = response.json<Deployment>();
+		const started = Date.now();
+		const waited = await ctx.inject({
+			url: `/api/v1/deployments/${id}?wait=1`,
+			headers: { "if-none-match": response.headers.etag as string },
+		});
+		expect(waited.statusCode).toBe(304);
+		expect(Date.now() - started).toBeGreaterThanOrEqual(1000);
+	});
+
+	test("?wait is at most 60 seconds", async () => {
+		const { id } = (await create(minimal)).json<Deployment>();
+		const response = await ctx.inject({
+			url: `/api/v1/deployments/${id}?wait=61`,
+		});
+		expect(response.statusCode).toBe(400);
 	});
 });
 

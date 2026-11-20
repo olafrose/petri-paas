@@ -26,6 +26,12 @@ export const GUIDE_ENDPOINTS: GuideEndpoint[] = [
 	},
 	{
 		method: "GET",
+		path: "/api/v1/api-keys/current",
+		access: "apiKey",
+		text: "Your key: name, scopes, expiry",
+	},
+	{
+		method: "GET",
 		path: "/api/v1/settings",
 		access: { scope: "deploy:read" },
 		text: "Limits in force (upload size, build time, memory, TTL)",
@@ -58,13 +64,13 @@ export const GUIDE_ENDPOINTS: GuideEndpoint[] = [
 		method: "GET",
 		path: "/api/v1/deployments",
 		access: { scope: "deploy:read" },
-		text: "Cultures (`?projectId=`, `?status=`)",
+		text: "Cultures (`?project=<slug>`, `?status=`)",
 	},
 	{
 		method: "GET",
 		path: "/api/v1/deployments/:id",
 		access: { scope: "deploy:read" },
-		text: "One culture: `status`, `url`, `latestBuild`",
+		text: "One culture: `status`, `url`, `latestBuild`; `?wait=60` for the next change",
 	},
 	{
 		method: "GET",
@@ -133,7 +139,9 @@ const accessText = (access: Access) =>
 		? "no key"
 		: access === "owner"
 			? "owner only"
-			: `\`${access.scope}\``;
+			: access === "apiKey"
+				? "any key"
+				: `\`${access.scope}\``;
 
 /**
  * How to use petri., for coding assistants: one page, in Markdown,
@@ -199,6 +207,16 @@ The answer holds \`userCode\`, \`reviewUrl\`, \`pollToken\`, \`expiresAt\`
 Ask only for the scopes you need. \`deploy:delete\` is rarely needed;
 the owner may grant fewer scopes than you asked for.
 
+To see what a key may do, before trying, and when it expires:
+
+\`\`\`sh
+curl ${api}/api-keys/current -H "Authorization: Bearer $PETRI_KEY"
+\`\`\`
+
+It answers the key's \`name\`, \`scopes\` and \`expiresAt\` (\`null\`:
+never). A 401 means the key is wrong, revoked or expired: ask for a
+new one.
+
 ## 2. Grow a culture
 
 The app needs a **Dockerfile** and must answer HTTP on one port, on all
@@ -228,7 +246,9 @@ curl -X POST ${api}/deployments/upload \\
 
 - \`project\` is the experiment's slug (lower case, digits, dashes). A
   new slug starts a new experiment; reuse it for new versions of the
-  same idea. List experiments first (\`GET ${api}/projects\`).
+  same idea. List experiments first (\`GET ${api}/projects\`), and an
+  experiment's cultures with
+  \`GET ${api}/deployments?project=<experiment-slug>\`.
 - \`name\` tells cultures apart (defaults to the Git ref, or "upload").
 - \`source.directory\` (Git) or \`directory\` (ZIP): where the
   Dockerfile is, if not at the top.
@@ -253,10 +273,25 @@ curl -X POST ${api}/deployments/upload \\
 
 ## 3. Follow it
 
-Poll \`GET ${api}/deployments/<id>\` every few seconds (or follow
-\`/events/stream\`). \`status\` goes \`queued\` → \`cloning\` →
-\`building\` → \`deploying\` → \`health_check\` → \`ready\`, or ends in
-\`failed\`. A build takes from seconds to a few minutes.
+\`status\` goes \`queued\` → \`cloning\` → \`building\` → \`deploying\` →
+\`health_check\` → \`ready\`, or ends in \`failed\`. A build takes from
+seconds to a few minutes. Don't poll: ask once per change, and petri.
+answers when it happens.
+
+\`\`\`sh
+curl -si "${api}/deployments/<id>?wait=60" \\
+  -H "Authorization: Bearer $PETRI_KEY" -H 'If-None-Match: <etag>'
+\`\`\`
+
+Every answer about a culture (also the one that created it) has an
+\`ETag\` header, which changes with \`status\` and \`latestBuild\`. Send
+the last one you got as \`If-None-Match\`: the answer comes as soon as
+the culture differs from it, with the new state and a new \`ETag\`, or
+after a minute as **304** (nothing changed; ask again). Keep the
+quotes and the \`W/\` of the tag. Without \`If-None-Match\`, it waits
+for the next change from the state when your request arrives.
+(\`/events/stream\` follows the history live, if you can read
+Server-Sent Events.)
 
 - **ready**: \`url\` is the address, by default
   \`${previewScheme}//<experiment-slug>-<culture-name>.${previewHost}\`. Give
@@ -281,7 +316,8 @@ address; don't grow a new culture for each change.
      -H "Authorization: Bearer $PETRI_KEY" -F 'archive=@<archive.zip>'
    \`\`\`
 
-3. **Follow** \`latestBuild\` in \`GET ${api}/deployments/<id>\`: it is
+3. **Follow** \`latestBuild\` with \`GET ${api}/deployments/<id>?wait=60\`
+   and the \`ETag\` of the redeploy's answer, as in section 3: it is
    the new build, \`queued\`, \`running\`, then \`succeeded\` or
    \`failed\` (with \`errorMessage\`; its log is
    \`/logs?build=<latestBuild.id>\`). A **ready** culture stays

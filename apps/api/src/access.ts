@@ -12,10 +12,11 @@ import { ApiError } from "./errors.ts";
  * - "public": anyone
  * - "owner": the signed-in owner only (not API keys)
  * - { scope }: the signed-in owner, or an API key with that scope
+ * - "apiKey": any API key, whatever its scopes (not the owner)
  *
  * Routes without a rule are treated as "owner".
  */
-export type Access = "public" | "owner" | { scope: Scope };
+export type Access = "public" | "owner" | "apiKey" | { scope: Scope };
 
 export type Principal =
 	| { type: "owner"; userId: string }
@@ -101,6 +102,13 @@ export function registerAccessControl(
 			) {
 				throw new ApiError(403, "forbidden", "Cross-origin request rejected");
 			}
+			if (access === "apiKey") {
+				throw new ApiError(
+					403,
+					"forbidden",
+					"This action is for API keys; a sign-in has none",
+				);
+			}
 			return;
 		}
 		if (access === "owner") {
@@ -110,6 +118,7 @@ export function registerAccessControl(
 				"This action requires signing in; API keys cannot perform it",
 			);
 		}
+		if (access === "apiKey") return;
 		if (!principal.scopes.includes(access.scope)) {
 			throw new ApiError(
 				403,

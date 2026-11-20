@@ -1,4 +1,9 @@
-import type { ApiKeyList, ErrorResponse, Project } from "@petri/contracts";
+import type {
+	ApiKey,
+	ApiKeyList,
+	ErrorResponse,
+	Project,
+} from "@petri/contracts";
 import { apiKeys } from "@petri/database";
 import { eq } from "drizzle-orm";
 import { describe, expect, test } from "vitest";
@@ -174,6 +179,32 @@ describe("API keys", () => {
 			payload: { name: "escalation", scopes: ["deploy:read"] },
 		});
 		expect(create.statusCode).toBe(403);
+	});
+
+	test("can look at themselves, whatever their scopes", async () => {
+		const { apiKey: created, key } = await ctx.createKey(["deploy:create"], {
+			expiresInDays: 30,
+		});
+		await ctx.createKey(["deploy:read"]);
+
+		const response = await ctx.withKey(key, {
+			url: "/api/v1/api-keys/current",
+		});
+		expect(response.statusCode).toBe(200);
+		const current = response.json<ApiKey>();
+		expect(current).toMatchObject({
+			id: created.id,
+			name: "test key",
+			scopes: ["deploy:create"],
+			expiresAt: created.expiresAt,
+			revokedAt: null,
+		});
+		expect(current.lastUsedAt).not.toBeNull();
+		expect(response.body).not.toContain(key);
+
+		// A sign-in has no key to describe.
+		const owner = await ctx.inject({ url: "/api/v1/api-keys/current" });
+		expect(owner.statusCode).toBe(403);
 	});
 
 	test("stop working once revoked", async () => {

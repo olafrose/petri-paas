@@ -248,7 +248,22 @@ export type DeploymentList = z.infer<typeof deploymentList>;
 export const listDeploymentsQuery = z
 	.object({
 		projectId: z.uuid().optional(),
+		project: dnsLabel
+			.optional()
+			.meta({ description: "Project slug: only its deployments" }),
 		status: deploymentStatus.optional(),
+	})
+	.strict();
+
+/** Longest `wait` of `GET /deployments/:id`, in seconds. */
+export const MAX_WAIT_SECONDS = 60;
+
+export const getDeploymentQuery = z
+	.object({
+		wait: z.coerce.number().int().min(0).max(MAX_WAIT_SECONDS).optional().meta({
+			description:
+				"Seconds to wait for the status or the latest build to change",
+		}),
 	})
 	.strict();
 

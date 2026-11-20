@@ -26,6 +26,7 @@ import {
 	type DeploymentDeps,
 	redeployDeployment,
 	redeploySource,
+	sendDeployment,
 } from "./deployments.ts";
 
 export interface UploadOptions extends DeploymentDeps {
@@ -113,10 +114,8 @@ export const uploadRoutes: FastifyPluginAsync<UploadOptions> = async (
 						},
 					),
 			);
-			return reply
-				.status(201)
-				.header("location", `/api/v1/deployments/${created.id}`)
-				.send(created);
+			reply.header("location", `/api/v1/deployments/${created.id}`);
+			return sendDeployment(reply, 201, created);
 		},
 	);
 
@@ -170,7 +169,7 @@ export const uploadRoutes: FastifyPluginAsync<UploadOptions> = async (
 					request.principal,
 				),
 			);
-			return reply.status(202).send(result);
+			return sendDeployment(reply, 202, result);
 		},
 	);
 };

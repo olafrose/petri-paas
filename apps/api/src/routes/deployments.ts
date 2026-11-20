@@ -1,4 +1,4 @@
-import { randomBytes } from "node:crypto";
+import { createHash, randomBytes } from "node:crypto";
 import {
 	type BuildSummary,
 	buildList,
@@ -10,6 +10,7 @@ import {
 	deploymentEventsQuery,
 	deploymentList,
 	errorResponse,
+	getDeploymentQuery,
 	idParams,
 	listDeploymentsQuery,
 	redeployBody,
@@ -24,6 +25,7 @@ import {
 	type DeploymentStatus,
 	deploymentEvents,
 	deployments,
+	type EventListener,
 	isConstraintViolation,
 	projects,
 	publishEvent,
@@ -41,7 +43,9 @@ import {
 } from "@petri/deployment-core";
 import type { JobName, JobQueue } from "@petri/jobs";
 import { and, asc, desc, eq, gt, inArray, type SQL } from "drizzle-orm";
+import type { FastifyReply } from "fastify";
 import type { FastifyPluginAsyncZod } from "fastify-type-provider-zod";
+import { z } from "zod";
 import type { Principal } from "../access.ts";
 import { ApiError } from "../errors.ts";
 import { slugify } from "../slug.ts";
@@ -51,6 +55,14 @@ type BuildRow = typeof builds.$inferSelect;
 
 const HOUR_MS = 60 * 60 * 1000;
 const MAX_LABEL = 63;
+/**
+ * A waiting request answers after this long at the latest, even if
+ * asked to wait longer: reverse proxies such as NPM give up on an
+ * upstream that is silent for a minute.
+ */
+const MAX_HOLD_MS = 55_000;
+/** Catches changes that published no event (e.g. a build's status). */
+const WAIT_POLL_MS = 2000;
 
 /** What the deployment routes and functions work with. */
 export interface DeploymentDeps {
@@ -105,6 +117,39 @@ function toBuild(row: DeploymentRow, build: BuildRow): BuildSummary {
 		finishedAt: build.finishedAt?.toISOString() ?? null,
 		errorMessage: build.errorMessage,
 	};
+}
+
+/**
+ * The deployment's entity tag: it changes with the status or the latest
+ * build (a new one, or its status), what someone following a build
+ * waits for. Weak, since other fields may change under the same tag.
+ */
+export function followTag(deployment: Deployment): string {
+	const build = deployment.latestBuild;
+	const state = [deployment.status, build?.id, build?.status].join(" ");
+	const hash = createHash("sha256").update(state).digest("base64url");
+	return `W/"${hash.slice(0, 16)}"`;
+}
+
+/** Sends the deployment with its tag, for a later `If-None-Match`. */
+export function sendDeployment(
+	reply: FastifyReply,
+	status: number,
+	deployment: Deployment,
+) {
+	return reply
+		.status(status)
+		.header("etag", followTag(deployment))
+		.send(deployment);
+}
+
+/** Whether an `If-None-Match` header names the tag. */
+function matchesTag(header: string | undefined, tag: string) {
+	if (!header) return false;
+	return header
+		.split(",")
+		.map((value) => value.trim())
+		.some((value) => value === "*" || value === tag);
 }
 
 /** The most recent build of each given deployment. */
@@ -525,12 +570,79 @@ function requestedBy(principal: Principal | null) {
 	return { type: "owner" };
 }
 
-export const deploymentRoutes: FastifyPluginAsyncZod<DeploymentDeps> = async (
-	app,
-	deps,
-) => {
+export const deploymentRoutes: FastifyPluginAsyncZod<
+	DeploymentDeps & {
+		/** Live events from the worker, to wake waiting requests. */
+		events: EventListener;
+	}
+> = async (app, { events, ...deps }) => {
 	const { db, previewBaseUrl } = deps;
 	const tags = ["deployments"];
+
+	async function findDeployment(id: string) {
+		const [row] = await db
+			.select()
+			.from(deployments)
+			.where(eq(deployments.id, id));
+		if (!row) throw new ApiError(404, "not_found", "Deployment not found");
+		const latest = await latestBuilds(db, [row.id]);
+		return toDeployment(row, latest.get(row.id), previewBaseUrl);
+	}
+
+	/**
+	 * The deployment once its tag is none of `seen` (default: its tag
+	 * now), or as it is when the time is up or the client goes away.
+	 * Woken by the deployment's events; polls in case one published none.
+	 */
+	async function waitForChange(
+		id: string,
+		seen: string | undefined,
+		ms: number,
+		reply: FastifyReply,
+	) {
+		let woken = false;
+		let wake = () => {
+			woken = true;
+		};
+		// Subscribed before the first read, so no change falls in between.
+		const unsubscribe = events.subscribe((event) => {
+			if (event.deploymentId === id) wake();
+		});
+		let gone = false;
+		const onClose = () => {
+			gone = true;
+			wake();
+		};
+		reply.raw.once("close", onClose);
+		try {
+			let current = await findDeployment(id);
+			const baseline = seen ?? followTag(current);
+			const deadline = Date.now() + ms;
+			while (matchesTag(baseline, followTag(current))) {
+				const left = deadline - Date.now();
+				if (left <= 0 || gone) break;
+				if (!woken) {
+					await new Promise<void>((resolve) => {
+						const timer = setTimeout(done, Math.min(WAIT_POLL_MS, left));
+						function done() {
+							clearTimeout(timer);
+							resolve();
+						}
+						wake = done;
+					});
+				}
+				woken = false;
+				wake = () => {
+					woken = true;
+				};
+				current = await findDeployment(id);
+			}
+			return current;
+		} finally {
+			unsubscribe();
+			reply.raw.off("close", onClose);
+		}
+	}
 
 	app.post(
 		"/deployments",
@@ -560,10 +672,8 @@ export const deploymentRoutes: FastifyPluginAsyncZod<DeploymentDeps> = async (
 				build: body.build,
 				lifecycle: body.lifecycle,
 			});
-			return reply
-				.status(201)
-				.header("location", `/api/v1/deployments/${created.id}`)
-				.send(created);
+			reply.header("location", `/api/v1/deployments/${created.id}`);
+			return sendDeployment(reply, 201, created);
 		},
 	);
 
@@ -582,6 +692,17 @@ export const deploymentRoutes: FastifyPluginAsyncZod<DeploymentDeps> = async (
 			const filters: SQL[] = [];
 			if (request.query.projectId) {
 				filters.push(eq(deployments.projectId, request.query.projectId));
+			}
+			if (request.query.project) {
+				filters.push(
+					inArray(
+						deployments.projectId,
+						db
+							.select({ id: projects.id })
+							.from(projects)
+							.where(eq(projects.slug, request.query.project)),
+					),
+				);
 			}
 			if (request.query.status) {
 				filters.push(eq(deployments.status, request.query.status));
@@ -610,18 +731,40 @@ export const deploymentRoutes: FastifyPluginAsyncZod<DeploymentDeps> = async (
 			schema: {
 				tags,
 				summary: "Get a deployment",
+				description: [
+					"The `ETag` header changes with the status and the latest build (a new one, or its status).",
+					"",
+					"`wait=<seconds>` (at most 60) follows a build without polling: the answer comes as soon as the tag differs from `If-None-Match` (send the `ETag` of the previous answer), or from the tag when the request arrived if there is none. If nothing changes in time, 304 with the same tag; ask again. The server answers after 55 seconds at the latest.",
+					"",
+					"Without `wait`, a matching `If-None-Match` answers 304 at once.",
+				].join("\n"),
 				params: idParams,
-				response: { 200: deployment, 404: errorResponse },
+				querystring: getDeploymentQuery,
+				response: {
+					200: deployment,
+					304: z.null().meta({ description: "Not changed" }),
+					404: errorResponse,
+				},
 			},
 		},
-		async (request) => {
-			const [row] = await db
-				.select()
-				.from(deployments)
-				.where(eq(deployments.id, request.params.id));
-			if (!row) throw new ApiError(404, "not_found", "Deployment not found");
-			const latest = await latestBuilds(db, [row.id]);
-			return toDeployment(row, latest.get(row.id), previewBaseUrl);
+		async (request, reply) => {
+			const { id } = request.params;
+			const seen = request.headers["if-none-match"];
+			const wait = request.query.wait ?? 0;
+			const current =
+				wait > 0
+					? await waitForChange(
+							id,
+							seen,
+							Math.min(wait * 1000, MAX_HOLD_MS),
+							reply,
+						)
+					: await findDeployment(id);
+			const tag = followTag(current);
+			if (matchesTag(seen, tag)) {
+				return reply.status(304).header("etag", tag).send(null);
+			}
+			return sendDeployment(reply, 200, current);
 		},
 	);
 
@@ -726,13 +869,15 @@ export const deploymentRoutes: FastifyPluginAsyncZod<DeploymentDeps> = async (
 				},
 			},
 		},
-		async (request) =>
-			updateLifecycle(
+		async (request, reply) => {
+			const result = await updateLifecycle(
 				deps,
 				request.params.id,
 				request.body.lifecycle,
 				request.principal,
-			),
+			);
+			return sendDeployment(reply, 200, result);
+		},
 	);
 
 	app.post(
@@ -761,7 +906,7 @@ export const deploymentRoutes: FastifyPluginAsyncZod<DeploymentDeps> = async (
 				{ ref: request.body?.ref },
 				request.principal,
 			);
-			return reply.status(202).send(result);
+			return sendDeployment(reply, 202, result);
 		},
 	);
 
@@ -781,7 +926,7 @@ export const deploymentRoutes: FastifyPluginAsyncZod<DeploymentDeps> = async (
 				"stop",
 				request.principal,
 			);
-			return reply.status(202).send(result);
+			return sendDeployment(reply, 202, result);
 		},
 	);
 
@@ -801,7 +946,7 @@ export const deploymentRoutes: FastifyPluginAsyncZod<DeploymentDeps> = async (
 				"start",
 				request.principal,
 			);
-			return reply.status(202).send(result);
+			return sendDeployment(reply, 202, result);
 		},
 	);
 
@@ -821,7 +966,7 @@ export const deploymentRoutes: FastifyPluginAsyncZod<DeploymentDeps> = async (
 				"delete",
 				request.principal,
 			);
-			return reply.status(202).send(result);
+			return sendDeployment(reply, 202, result);
 		},
 	);
 };

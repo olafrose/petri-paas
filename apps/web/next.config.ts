@@ -18,6 +18,11 @@ const config: NextConfig = {
 			"@petri/contracts": "../../packages/contracts/src/index.ts",
 		},
 	},
+	experimental: {
+		// Forwarded API requests may be silent for up to 55 seconds
+		// (`GET /deployments/:id?wait=`); the default gives up after 30.
+		proxyTimeout: 70_000,
+	},
 	// The browser talks to the API through this app, so the admin panel and
 	// the API share one origin and the session cookie.
 	async rewrites() {
