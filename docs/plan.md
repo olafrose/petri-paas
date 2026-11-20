@@ -634,7 +634,8 @@ needs a key the owner creates in the admin panel and pastes into it.
 
 **Order:** 5.1 settles the words that 5.2's screens use. 5.4 comes
 next: temporary cultures pile up until it exists. 5.5 builds on its
-expired state, and 5.6 on both. 5.7 is small and can come anytime. 5.8
+expired state, and 5.6 on both. 5.7 and 5.7.1 are small and can come
+anytime. 5.8
 is last: it starts with a spike whose outcome may change it.
 
 ### 5.1 Cultures (deployments)
@@ -899,6 +900,33 @@ Small things that save an assistant requests and guesswork:
 
 **Done when:** following the guide, an assistant needs one request to
 check its key, and one request per status change to follow a build.
+
+### 5.7.1 Renaming cultures
+
+A culture's name and preview address are fixed when it is grown. A
+typo, or a culture that turned into something else, means growing a
+new one.
+
+-   `PATCH /deployments/:id` (scope `deploy:update`, as for the
+    lifecycle) also takes `name` and `subdomain`, with the same rules as
+    when growing one: a DNS label, unique (409 if taken). Not for
+    cultures that are deleting or deleted.
+-   A new subdomain moves the preview: a ready culture gets the route
+    for the new address and loses the old one, under its lock, so the
+    route sync and a redeploy's switch see either one or the other. The
+    old address answers "No preview at this address." and is free for
+    another culture.
+-   Each change goes into the history ("Renamed from … to …", "Moved
+    from … to …").
+-   Admin panel: the culture page edits name and subdomain, with the
+    new address shown before saving; the gallery shows the new name.
+-   The guide mentions renaming; the endpoint table's `PATCH` entry
+    lists the new fields.
+
+**Done when:** a renamed ready culture answers at its new address and
+no longer at the old one, its history says so, and a redeploy running
+meanwhile switches to the new address (integration tests); renaming
+from the culture page works end to end.
 
 ### 5.8 Buildpacks
 
