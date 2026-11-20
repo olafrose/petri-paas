@@ -82,7 +82,25 @@ export const GUIDE_ENDPOINTS: GuideEndpoint[] = [
 		method: "GET",
 		path: "/api/v1/deployments/:id/logs",
 		access: { scope: "deploy:read" },
-		text: "Build log; `?source=runtime` for the app's output",
+		text: "Build log (`?build=<id>`); `?source=runtime` for the app's output",
+	},
+	{
+		method: "GET",
+		path: "/api/v1/deployments/:id/builds",
+		access: { scope: "deploy:read" },
+		text: "Its builds, newest first, with commit and result",
+	},
+	{
+		method: "POST",
+		path: "/api/v1/deployments/:id/redeploy",
+		access: { scope: "deploy:update" },
+		text: 'Build again from Git (`{"ref": ...}` to change it)',
+	},
+	{
+		method: "POST",
+		path: "/api/v1/deployments/:id/upload",
+		access: { scope: "deploy:update" },
+		text: "Build again from a new ZIP archive",
 	},
 	{
 		method: "POST",
@@ -227,8 +245,36 @@ Poll \`GET ${api}/deployments/<id>\` every few seconds (or follow
   it to your user.
 - **failed**: \`latestBuild.errorMessage\` says why; the build log
   (\`GET ${api}/deployments/<id>/logs\`) and the app's output
-  (\`?source=runtime\`) say more. Fix the cause and grow a new culture;
-  delete the failed one if you created it.
+  (\`?source=runtime\`) say more. Fix the cause and redeploy (4).
+
+## 4. Change it: push, redeploy, follow, look
+
+A new version of the same app goes to the **same culture**, at the same
+address; don't grow a new culture for each change.
+
+1. **Push** your commit (Git), or zip the files again (ZIP).
+2. **Redeploy**. Git: \`POST ${api}/deployments/<id>/redeploy\` fetches
+   the ref again, so a branch picks up your new commits; send
+   \`{"ref": "<branch, tag or commit>"}\` to build another one from now
+   on. ZIP: send the new archive:
+
+   \`\`\`sh
+   curl -X POST ${api}/deployments/<id>/upload \\
+     -H "Authorization: Bearer $PETRI_KEY" -F 'archive=@<archive.zip>'
+   \`\`\`
+
+3. **Follow** \`latestBuild\` in \`GET ${api}/deployments/<id>\`: it is
+   the new build, \`queued\`, \`running\`, then \`succeeded\` or
+   \`failed\` (with \`errorMessage\`; its log is
+   \`/logs?build=<latestBuild.id>\`). A **ready** culture stays
+   \`ready\` meanwhile: the old version keeps answering until the new
+   one passes its health check, and keeps running if it fails. A
+   culture that was stopped, failed or expired goes through the statuses
+   of section 3 instead.
+4. **Look** at \`url\` again: same address, new version.
+
+One build at a time: a redeploy while one is queued or running answers
+409. \`GET ${api}/deployments/<id>/builds\` lists them all.
 
 ## Ground rules
 

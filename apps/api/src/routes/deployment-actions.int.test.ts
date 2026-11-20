@@ -4,6 +4,7 @@ import type {
 	ErrorResponse,
 } from "@petri/contracts";
 import {
+	builds,
 	type DeploymentStatus,
 	deploymentStatus,
 	deployments,
@@ -57,6 +58,11 @@ async function deploymentIn(status: DeploymentStatus) {
 		.update(deployments)
 		.set({ status })
 		.where(eq(deployments.id, created.id));
+	// Its first build has ended (a running one rules out a redeploy).
+	await ctx.db
+		.update(builds)
+		.set({ status: "succeeded" })
+		.where(eq(builds.deploymentId, created.id));
 	return created.id;
 }
 

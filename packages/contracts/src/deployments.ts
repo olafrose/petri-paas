@@ -158,14 +158,41 @@ export const deploymentSource = z.discriminatedUnion("type", [
 	}),
 ]);
 
-export const buildSummary = z.object({
-	id: z.uuid(),
-	status: z.enum(["queued", "running", "succeeded", "failed", "cancelled"]),
-	commit: z.string().nullable().meta({ description: "Git commit built" }),
-	startedAt: z.iso.datetime().nullable(),
-	finishedAt: z.iso.datetime().nullable(),
-	errorMessage: z.string().nullable(),
-});
+export const buildSummary = z
+	.object({
+		id: z.uuid(),
+		status: z.enum(["queued", "running", "succeeded", "failed", "cancelled"]),
+		ref: z
+			.string()
+			.nullable()
+			.meta({ description: "Git branch, tag or commit asked for" }),
+		commit: z.string().nullable().meta({ description: "Git commit built" }),
+		createdAt: z.iso.datetime(),
+		startedAt: z.iso.datetime().nullable(),
+		finishedAt: z.iso.datetime().nullable(),
+		errorMessage: z.string().nullable(),
+	})
+	.meta({ id: "Build" });
+
+export type BuildSummary = z.infer<typeof buildSummary>;
+
+export const buildList = z
+	.object({ items: z.array(buildSummary) })
+	.meta({ id: "BuildList" });
+
+export type BuildList = z.infer<typeof buildList>;
+
+export const redeployBody = z
+	.object({
+		ref: gitSource.shape.ref.optional().meta({
+			description:
+				"Git only: build this branch, tag or commit from now on. Defaults to the current ref, fetched again.",
+		}),
+	})
+	.strict()
+	.meta({ id: "Redeploy" });
+
+export type RedeployBody = z.infer<typeof redeployBody>;
 
 export const deployment = z
 	.object({
@@ -186,7 +213,10 @@ export const deployment = z
 		}),
 		lifecycleMode: lifecycleMode,
 		expiresAt: z.iso.datetime().nullable(),
-		latestBuild: buildSummary.nullable(),
+		latestBuild: buildSummary.nullable().meta({
+			description:
+				"The newest build. While a ready deployment is redeployed, this is the new one: `queued` or `running`, next to the version that answers.",
+		}),
 		actions: z
 			.array(deploymentAction)
 			.meta({ description: "Actions possible in the current status" }),

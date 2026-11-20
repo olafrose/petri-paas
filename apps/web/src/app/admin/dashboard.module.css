@@ -260,6 +260,31 @@
 	font-weight: 600;
 }
 
+.builds {
+	list-style: none;
+	margin: 0;
+	padding: 0;
+}
+
+.build {
+	display: grid;
+	grid-template-columns: 11rem minmax(0, 1fr) minmax(0, 1.5fr);
+	gap: var(--space-3);
+	padding: var(--space-1) 0;
+	border-bottom: 1px solid var(--paper-line);
+}
+
+.build .error {
+	display: inline;
+}
+
+@media (max-width: 40rem) {
+	.build {
+		grid-template-columns: 1fr;
+		gap: 0;
+	}
+}
+
 /* Deploy form */
 
 .form {

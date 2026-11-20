@@ -38,6 +38,8 @@ export const KEPT_CAPABILITIES = [
 export interface ContainerSpec {
 	deploymentId: string;
 	buildId: string;
+	/** The container's name; by default the deployment's (`containerName`). */
+	name?: string;
 	image: string;
 	/** Network from `ensureNetwork`. */
 	network: string;
@@ -92,6 +94,12 @@ interface InspectResponse {
 
 /** The deployment's container; other containers on its network reach it by this name. */
 export const containerName = (deploymentId: string) => `petri-${deploymentId}`;
+/**
+ * A new version of a ready deployment, started next to the running one
+ * until it passes its health check (see `renameContainer`).
+ */
+export const nextContainerName = (deploymentId: string) =>
+	`petri-${deploymentId}-next`;
 /** The deployment's own network (see `ensureNetwork`). */
 export const networkName = (deploymentId: string) => `petri-${deploymentId}`;
 
@@ -248,24 +256,23 @@ export class DockerRuntime {
 	}
 
 	/**
-	 * Creates the deployment's container, or returns the existing one if it
-	 * already runs this build. A container of an older build is replaced.
+	 * Creates the deployment's container (or the one named in the spec), or
+	 * returns the existing one if it already runs this build. A container
+	 * of another build is replaced.
 	 */
 	async createContainer(spec: ContainerSpec): Promise<string> {
-		const existing = await this.inspect(spec.deploymentId);
+		const name = spec.name ?? containerName(spec.deploymentId);
+		const existing = await this.inspectContainer(name);
 		if (existing?.buildId === spec.buildId) return existing.id;
-		if (existing) await this.removeContainer(spec.deploymentId);
+		if (existing) await this.removeContainerNamed(name);
 
 		const request = createBody(spec);
 		const { body } = await this.#docker.call<{ Id: string }>(
 			"POST",
 			"/containers/create",
-			{
-				query: { name: containerName(spec.deploymentId) },
-				json: request,
-			},
+			{ query: { name }, json: request },
 		);
-		await this.#verifyLimits(spec.deploymentId, request.HostConfig);
+		await this.#verifyLimits(name, request.HostConfig);
 		return body.Id;
 	}
 
@@ -275,7 +282,7 @@ export class DockerRuntime {
 	 * run an app without them.
 	 */
 	async #verifyLimits(
-		deploymentId: string,
+		name: string,
 		requested: ReturnType<typeof createBody>["HostConfig"],
 	) {
 		const { body } = await this.#docker.call<{
@@ -284,22 +291,26 @@ export class DockerRuntime {
 				NanoCpus: number;
 				PidsLimit: number | null;
 			};
-		}>("GET", `/containers/${containerName(deploymentId)}/json`);
+		}>("GET", `/containers/${encodeURIComponent(name)}/json`);
 		const missing: string[] = [];
 		if (body.HostConfig.Memory !== requested.Memory) missing.push("memory");
 		if (body.HostConfig.NanoCpus !== requested.NanoCpus) missing.push("CPU");
 		if (body.HostConfig.PidsLimit !== requested.PidsLimit)
 			missing.push("process");
 		if (missing.length > 0) {
-			await this.removeContainer(deploymentId);
+			await this.removeContainerNamed(name);
 			throw new LimitsNotEnforcedError(missing);
 		}
 	}
 
 	async start(deploymentId: string): Promise<void> {
+		await this.startContainer(containerName(deploymentId));
+	}
+
+	async startContainer(name: string): Promise<void> {
 		await this.#docker.call(
 			"POST",
-			`/containers/${containerName(deploymentId)}/start`,
+			`/containers/${encodeURIComponent(name)}/start`,
 			{ accept: [304] }, // already running
 		);
 	}
@@ -308,8 +319,11 @@ export class DockerRuntime {
 	 * Restarts the app if it crashes or the host reboots. Call once the app
 	 * passed its health check.
 	 */
-	async enableRestarts(deploymentId: string): Promise<void> {
-		await this.#setRestartPolicy(deploymentId, "unless-stopped");
+	async enableRestarts(
+		deploymentId: string,
+		name = containerName(deploymentId),
+	): Promise<void> {
+		await this.#setRestartPolicy(name, "unless-stopped");
 	}
 
 	/**
@@ -317,14 +331,14 @@ export class DockerRuntime {
 	 * passes its health check, a crash must show as a crash.
 	 */
 	async disableRestarts(deploymentId: string): Promise<void> {
-		await this.#setRestartPolicy(deploymentId, "no");
+		await this.#setRestartPolicy(containerName(deploymentId), "no");
 	}
 
-	async #setRestartPolicy(deploymentId: string, name: "no" | "unless-stopped") {
+	async #setRestartPolicy(name: string, policy: "no" | "unless-stopped") {
 		await this.#docker.call(
 			"POST",
-			`/containers/${containerName(deploymentId)}/update`,
-			{ json: { RestartPolicy: { Name: name } } },
+			`/containers/${encodeURIComponent(name)}/update`,
+			{ json: { RestartPolicy: { Name: policy } } },
 		);
 	}
 
@@ -337,18 +351,42 @@ export class DockerRuntime {
 	}
 
 	async removeContainer(deploymentId: string): Promise<void> {
+		await this.removeContainerNamed(containerName(deploymentId));
+	}
+
+	async removeContainerNamed(name: string): Promise<void> {
 		await this.#docker.call(
 			"DELETE",
-			`/containers/${containerName(deploymentId)}`,
-			{ query: { force: true }, accept: [404] },
+			`/containers/${encodeURIComponent(name)}`,
+			{
+				query: { force: true },
+				accept: [404],
+			},
+		);
+	}
+
+	/**
+	 * Gives a container another name. Other containers on its network
+	 * reach it by the new name from then on.
+	 */
+	async renameContainer(name: string, newName: string): Promise<void> {
+		await this.#docker.call(
+			"POST",
+			`/containers/${encodeURIComponent(name)}/rename`,
+			{ query: { name: newName } },
 		);
 	}
 
 	/** The deployment's container, or null if there is none. */
-	async inspect(deploymentId: string): Promise<ContainerState | null> {
+	inspect(deploymentId: string): Promise<ContainerState | null> {
+		return this.inspectContainer(containerName(deploymentId));
+	}
+
+	/** The container with this name, or null if there is none. */
+	async inspectContainer(name: string): Promise<ContainerState | null> {
 		const { status, body } = await this.#docker.call<InspectResponse>(
 			"GET",
-			`/containers/${containerName(deploymentId)}/json`,
+			`/containers/${encodeURIComponent(name)}/json`,
 			{ accept: [404] },
 		);
 		if (status === 404) return null;
@@ -370,10 +408,14 @@ export class DockerRuntime {
 	}
 
 	/** The last lines of the container's output. */
-	async logs(deploymentId: string, tail = 200): Promise<string> {
+	async logs(
+		deploymentId: string,
+		tail = 200,
+		name = containerName(deploymentId),
+	): Promise<string> {
 		const response = await this.#docker.stream(
 			"GET",
-			`/containers/${containerName(deploymentId)}/logs`,
+			`/containers/${encodeURIComponent(name)}/logs`,
 			{ query: { stdout: true, stderr: true, tail, timestamps: true } },
 		);
 		return demultiplex(Buffer.concat(await collect(response)));

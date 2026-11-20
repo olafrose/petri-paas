@@ -7,6 +7,9 @@ export const SCOPES: { scope: Scope; text: string }[] = [
 		text: "See experiments, cultures, logs and settings",
 	},
 	{ scope: "deploy:create", text: "Create experiments and grow cultures" },
-	{ scope: "deploy:update", text: "Edit experiments; stop and start cultures" },
+	{
+		scope: "deploy:update",
+		text: "Edit experiments; stop, start and redeploy cultures",
+	},
 	{ scope: "deploy:delete", text: "Delete experiments and cultures" },
 ];

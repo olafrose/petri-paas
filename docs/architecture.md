@@ -501,6 +501,8 @@ duplicating project metadata.
   id              Unique identifier
   deployment_id   Related deployment
   status          Build status
+  source          What it builds (ref or archive)
+  commit          Git commit built
   provider        Dockerfile or buildpack
   started_at      Start timestamp
   finished_at     Completion timestamp
@@ -792,6 +794,31 @@ The worker should:
 A periodic reconciliation job should compare database state with actual
 Docker and edge proxy state.
 
+### 11.3 Redeploy
+
+A redeploy is a new build of an existing deployment, from its source:
+Git fetches the ref again (or a new one), a ZIP deployment may bring a
+new archive. Each build records what it builds; that becomes the
+deployment's source only once the build is live, so the running
+version never loses its source. One build runs at a time.
+
+A deployment that isn't running (stopped, failed, expired) takes the
+sequence above, from `queued`. A ready one stays `ready`, and the old
+version keeps answering:
+
+1.  The new build's steps go to the history (events of type `build`);
+    the build has its own status.
+2.  The new app starts on the deployment's network as
+    `petri-<id>-next`, next to the old one.
+3.  Once it passes its health check, under the deployment's lock: the
+    route points to it, the old app is removed, the new one takes the
+    name `petri-<id>`, and the route points to that name again.
+4.  The old image, and an archive the new one replaced, are removed.
+
+A failed build or health check removes only the new app; the history
+says why. Stopping or deleting the deployment meanwhile cancels the new
+build.
+
 ------------------------------------------------------------------------
 
 ## 12. API design
@@ -817,6 +844,8 @@ All endpoints are versioned under `/api/v1`.
   GET      `/deployments`                List deployments
   GET      `/deployments/:id`            Deployment details
   POST     `/deployments/:id/redeploy`   Rebuild and redeploy
+  POST     `/deployments/:id/upload`     Redeploy with a new ZIP
+  GET      `/deployments/:id/builds`     List its builds
   POST     `/deployments/:id/stop`       Stop deployment
   POST     `/deployments/:id/start`      Start deployment
   DELETE   `/deployments/:id`            Delete deployment

@@ -40,14 +40,19 @@ export class EdgeRouting {
 		this.settings = settings;
 	}
 
-	route(deployment: Routable, port: number): PreviewRoute {
+	/** By default to the deployment's container (see `containerName`). */
+	route(
+		deployment: Routable,
+		port: number,
+		container = containerName(deployment.id),
+	): PreviewRoute {
 		return {
 			deploymentId: deployment.id,
 			hostname: previewHostname(
 				this.settings.previewBaseUrl,
 				deployment.subdomain,
 			),
-			upstream: { host: containerName(deployment.id), port },
+			upstream: { host: container, port },
 		};
 	}
 
@@ -56,9 +61,13 @@ export class EdgeRouting {
 	 * joins its network, then the route is set. Returns the route's id,
 	 * for the deployment's `routeId`.
 	 */
-	async publish(deployment: Routable, port: number): Promise<string> {
+	async publish(
+		deployment: Routable,
+		port: number,
+		container?: string,
+	): Promise<string> {
 		await this.connect(deployment.id);
-		await this.proxy.setRoute(this.route(deployment, port));
+		await this.proxy.setRoute(this.route(deployment, port, container));
 		return routeId(deployment.id);
 	}
 

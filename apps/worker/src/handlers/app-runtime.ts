@@ -72,7 +72,8 @@ export async function choosePort(
 export async function checkHealth(
 	runtime: DockerRuntime,
 	settings: HealthSettings,
-	deploymentId: string,
+	/** The app's container: `containerName` or `nextContainerName`. */
+	container: string,
 	network: string,
 	port: number,
 	signal: AbortSignal,
@@ -84,7 +85,7 @@ export async function checkHealth(
 	try {
 		let address: string;
 		try {
-			address = await waitForAddress(runtime, deploymentId, network);
+			address = await waitForAddress(runtime, container, network);
 		} catch (error) {
 			if (!(error instanceof StepFailure)) throw error;
 			return { healthy: false, reason: error.message, attempts: 0 };
@@ -94,7 +95,7 @@ export async function checkHealth(
 			signal,
 			...settings.health,
 			isRunning: async () => {
-				const current = await runtime.inspect(deploymentId);
+				const current = await runtime.inspectContainer(container);
 				return {
 					running: current?.running ?? false,
 					exitCode: current?.exitCode ?? -1,
@@ -117,11 +118,11 @@ export async function checkHealth(
  */
 async function waitForAddress(
 	runtime: DockerRuntime,
-	deploymentId: string,
+	container: string,
 	network: string,
 ): Promise<string> {
 	for (let attempt = 0; attempt < 20; attempt++) {
-		const state = await runtime.inspect(deploymentId);
+		const state = await runtime.inspectContainer(container);
 		const address = state?.addresses[network];
 		if (state?.running && address) return address;
 		if (state && !state.running && state.status !== "created") {

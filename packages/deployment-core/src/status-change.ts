@@ -36,7 +36,7 @@ export class InvalidTransitionError extends Error {
 export type DeploymentUpdates = Partial<
 	Pick<
 		typeof deployments.$inferInsert,
-		"imageId" | "containerId" | "routeId" | "expiresAt"
+		"imageId" | "containerId" | "routeId" | "expiresAt" | "source"
 	>
 >;
 
@@ -129,4 +129,32 @@ export function updateStatus(
 	return withTransaction(db, (tx) =>
 		changeStatus(tx, deploymentId, to, change),
 	);
+}
+
+/**
+ * Records a history entry that doesn't change the status: the steps of a
+ * build that runs next to a ready deployment (a redeploy). Published
+ * like a status change, so the history updates live.
+ */
+export async function recordBuildEvent(
+	db: Database | Transaction,
+	deploymentId: string,
+	entry: { message: string; data?: Record<string, unknown> },
+): Promise<void> {
+	const [event] = await db
+		.insert(deploymentEvents)
+		.values({
+			deploymentId,
+			type: "build",
+			message: entry.message,
+			data: entry.data ?? null,
+		})
+		.returning({ id: deploymentEvents.id });
+	if (!event) throw new Error("insert returned no row");
+	await publishEvent(db, {
+		type: "deployment.build",
+		deploymentId,
+		eventId: event.id,
+		message: entry.message,
+	});
 }

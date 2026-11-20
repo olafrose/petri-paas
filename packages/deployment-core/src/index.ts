@@ -16,6 +16,7 @@ export {
 	type DeploymentStatusEvent,
 	type DeploymentUpdates,
 	InvalidTransitionError,
+	recordBuildEvent,
 	type StatusChange,
 	updateStatus,
 } from "./status-change.ts";

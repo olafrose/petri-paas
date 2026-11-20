@@ -22,12 +22,18 @@ export async function signIn(page: Page) {
 	await expect(page).toHaveURL((url) => url.pathname === "/admin");
 }
 
-/** A ZIP archive of the fixture e2e/fixtures/<name>, for an upload field. */
-export function fixtureZip(name: string) {
+/**
+ * A ZIP archive of the fixture e2e/fixtures/<name>, for an upload field.
+ * `change` edits its files' text, for a new version.
+ */
+export function fixtureZip(
+	name: string,
+	change: (file: string, text: string) => string = (_, text) => text,
+) {
 	const dir = new URL(`../fixtures/${name}/`, import.meta.url).pathname;
 	const entries = readdirSync(dir).map((file) => ({
 		name: `${name}/${file}`,
-		data: readFileSync(join(dir, file)),
+		data: Buffer.from(change(file, readFileSync(join(dir, file), "utf8"))),
 	}));
 	return {
 		name: `${name}.zip`,

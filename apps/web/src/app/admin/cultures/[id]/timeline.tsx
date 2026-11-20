@@ -7,8 +7,8 @@ import styles from "../../dashboard.module.css";
 
 /**
  * The deployment's history, followed live: the events stream resumes
- * after the last event already shown, and every new status reloads the
- * page's server data (status stamp, actions).
+ * after the last event already shown, and every new status (or step of
+ * a new batch) reloads the page's server data (status stamp, actions).
  */
 export function Timeline({
 	deploymentId,
@@ -39,7 +39,8 @@ export function Timeline({
 					? current
 					: [...current, event],
 			);
-			if (event.type === "status") router.refresh();
+			// Statuses, and the steps of a new batch next to a ready culture.
+			if (event.type === "status" || event.type === "build") router.refresh();
 		});
 		return () => source.close();
 	}, [deploymentId, router]);
@@ -50,7 +51,8 @@ export function Timeline({
 	return (
 		<ol className={styles.timeline}>
 			{events.map((event) => {
-				const to = (event.data as { to?: string } | null)?.to;
+				const data = event.data as { to?: string; failed?: boolean } | null;
+				const failed = data?.to === "failed" || data?.failed === true;
 				return (
 					<li key={event.id} className={styles.event}>
 						<time className={styles.eventTime} dateTime={event.createdAt}>
@@ -58,7 +60,7 @@ export function Timeline({
 								? new Date(event.createdAt).toLocaleTimeString("en-GB")
 								: ""}
 						</time>
-						<span className={to === "failed" ? styles.eventFailed : undefined}>
+						<span className={failed ? styles.eventFailed : undefined}>
 							{event.message}
 						</span>
 					</li>
