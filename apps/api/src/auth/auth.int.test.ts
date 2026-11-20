@@ -126,6 +126,22 @@ describe("rate limiting", () => {
 		// Even the right password is refused until the window passes.
 		expect((await signIn(auth)).status).toBe(429);
 	});
+
+	test("never limits session checks: the web app makes one per page", async () => {
+		const auth = createAuth({ db, publicUrl, secret });
+		await setOwner(auth, owner);
+		clientAddress++;
+		const cookie = sessionCookie(await signIn(auth));
+
+		// More than Better Auth's default of 100, without a pause.
+		const statuses = new Set<number>();
+		for (let check = 0; check < 120; check++) {
+			statuses.add(
+				(await call(auth, "/get-session", undefined, cookie)).status,
+			);
+		}
+		expect([...statuses]).toEqual([200]);
+	});
 });
 
 describe("OIDC", () => {
