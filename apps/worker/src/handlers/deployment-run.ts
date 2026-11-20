@@ -665,7 +665,7 @@ async function removeOldVersions(run: Run) {
 		}
 		await removeUnusedUpload(run, run.source, deployment.source);
 	} catch (error) {
-		// Reconciliation (phase 5) catches leftovers.
+		// The reconciliation job (reconcile.ts) removes leftovers.
 		log.warn({ err: error }, "removing the old version failed");
 	}
 }
@@ -730,7 +730,7 @@ async function removeCreated(run: Run, imageName: string, created: Created) {
 		if (created.network) await runtime.removeNetwork(deployment.id);
 		if (created.image) await runtime.removeImage(imageName);
 	} catch (error) {
-		// Reconciliation (phase 5) catches leftovers.
+		// The reconciliation job (reconcile.ts) removes leftovers.
 		log.warn(
 			{ err: error instanceof DockerApiError ? error.message : error },
 			"cleanup failed",

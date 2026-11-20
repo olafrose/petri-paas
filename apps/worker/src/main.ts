@@ -66,6 +66,9 @@ await registerHandlers(queue, {
 });
 // Every five minutes, once across all workers.
 await queue.schedule("deployment.expire", "*/5 * * * *", {});
+await queue.schedule("deployment.reconcile", "*/5 * * * *", {});
+// And now: whatever happened while no worker ran (e.g. the host restarted).
+await queue.send("deployment.reconcile", {});
 log.info("worker started");
 
 for (const signal of ["SIGINT", "SIGTERM"] as const) {

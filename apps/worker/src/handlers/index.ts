@@ -15,6 +15,7 @@ import {
 } from "./deployment-run.ts";
 import { deploymentExpireHandler } from "./expiry.ts";
 import { pingHandler } from "./ping.ts";
+import { deploymentReconcileHandler } from "./reconcile.ts";
 
 /** Registers a handler for every job type the worker processes. */
 export async function registerHandlers(
@@ -57,6 +58,14 @@ export async function registerHandlers(
 	await queue.work(
 		"deployment.expire",
 		withLogging(deps.log, "deployment.expire", deploymentExpireHandler(deps)),
+	);
+	await queue.work(
+		"deployment.reconcile",
+		withLogging(
+			deps.log,
+			"deployment.reconcile",
+			deploymentReconcileHandler(deps),
+		),
 	);
 	// Someone waits for these: polled often, never behind a build.
 	await queue.work(

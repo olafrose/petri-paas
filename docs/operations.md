@@ -305,5 +305,13 @@ docker compose exec -T postgres pg_dump -U petri petri | gzip > petri-$(date +%F
   `docker compose logs worker | grep route` shows what it did.
 - **A preview answers 502:** the route exists but the app isn't
   answering, e.g. it crashed. Check the deployment's events and logs.
+  Within ten minutes the worker marks a crashed app's culture `failed`,
+  with the app's last output in its history.
+- **A culture failed with "Interrupted":** the worker stopped during
+  its build (e.g. a restart). Redeploy it. The worker's reconciliation
+  runs at startup and every five minutes;
+  `docker compose logs worker | grep reconciled` shows what it changed.
+- **After a reboot:** Docker starts the apps again by itself and the
+  worker restores their routes; nothing to do.
 - **Every sign-in counts against one rate limit:** `NPM_ADDRESS` is
   missing or wrong, so the API can't see visitors' addresses.

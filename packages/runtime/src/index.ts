@@ -16,6 +16,7 @@ export {
 	KEPT_CAPABILITIES,
 	LABELS,
 	LimitsNotEnforcedError,
+	type ManagedResource,
 	networkName,
 	nextContainerName,
 	type ResourceLimits,

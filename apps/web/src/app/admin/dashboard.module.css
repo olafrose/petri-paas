@@ -267,6 +267,10 @@
 	font-weight: 600;
 }
 
+.eventOutput {
+	margin-top: var(--space-2);
+}
+
 .builds {
 	list-style: none;
 	margin: 0;
