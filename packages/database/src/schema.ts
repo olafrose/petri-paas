@@ -189,6 +189,12 @@ export const builds = pgTable(
 			.notNull()
 			.references(() => deployments.id, { onDelete: "cascade" }),
 		status: buildStatus().notNull().default("queued"),
+		/**
+		 * What this build is built from. It becomes the deployment's source
+		 * once the build is live (a redeploy may bring a new ref or archive).
+		 * Null for builds from before redeploys: they built the deployment's.
+		 */
+		source: jsonb().$type<DeploymentSource>(),
 		/** Null until the build strategy has been detected. */
 		provider: buildProvider(),
 		/** Git commit that was built (Git sources only). */

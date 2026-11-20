@@ -175,6 +175,62 @@ test("deploy a ZIP, open it, stop, start and delete it", async ({
 	await expect(page.getByText(project)).toHaveCount(0);
 });
 
+test("redeploy a new version to the same address", async ({
+	page,
+	context,
+}) => {
+	const project = unique("e2e-redeploy");
+	await page.goto("/admin/cultures/new");
+	await page.getByRole("button", { name: "ZIP upload" }).click();
+	await page.getByLabel("ZIP archive").setInputFiles(fixtureZip("hello"));
+	await page.getByLabel("Experiment").fill(project);
+	await page.getByRole("button", { name: "Grow culture" }).click();
+	await expect(statusStamp(page)).toHaveText("ready", { timeout: 90_000 });
+	const url = (await page
+		.locator("dd a[target=_blank]")
+		.getAttribute("href")) as string;
+
+	// A new archive, with a changed page.
+	await page
+		.getByLabel("New archive (optional)")
+		.setInputFiles(
+			fixtureZip("hello", (_, text) =>
+				text.replace("Hello from", "Hello again from"),
+			),
+		);
+	await page.getByRole("button", { name: "Redeploy" }).click();
+	// The culture stays ready while the new batch grows.
+	await expect(
+		page.getByText("growing a new batch", { exact: true }),
+	).toBeVisible();
+	await expect(statusStamp(page)).toHaveText("ready");
+	// One build at a time.
+	await expect(page.getByRole("button", { name: "Redeploy" })).toHaveCount(0);
+	await expect(page.getByText(/with the new batch$/)).toBeVisible({
+		timeout: 90_000,
+	});
+	await expect(
+		page.getByText("growing a new batch", { exact: true }),
+	).toHaveCount(0);
+	await expectLabWords(page);
+
+	const builds = page.locator("section", { hasText: "Builds" }).locator("li");
+	await expect(builds).toHaveCount(2);
+	await expect(builds.getByText("succeeded")).toHaveCount(2);
+
+	// Same address, new version.
+	const preview = await context.newPage();
+	await preview.goto(url);
+	await expect(preview.getByRole("heading")).toHaveText(
+		"Hello again from an end-to-end test",
+	);
+	await preview.close();
+
+	page.once("dialog", (dialog) => dialog.accept());
+	await page.getByRole("button", { name: "Delete" }).click();
+	await expect(statusStamp(page)).toHaveText("deleted", { timeout: 60_000 });
+});
+
 test("an experiment with cultures can't be deleted yet", async ({ page }) => {
 	const project = unique("e2e-keep");
 	await page.goto("/admin/cultures/new");

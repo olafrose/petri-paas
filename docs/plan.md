@@ -812,6 +812,20 @@ while the new one builds.
 **Redeploy**, from the admin panel and through the API, and an expired
 culture can be grown again.
 
+**Decided** (building it): each build records what it builds
+(`builds.source`); a new ref or archive becomes the culture's source
+once its build is live, and a failed build's archive is removed. The
+new app runs as `petri-<id>-next`; at the switch, under the culture's
+lock, the route points to it, the old app goes, and the new one is
+renamed `petri-<id>`, so everything else keeps finding it by that name.
+The steps of a new batch are history entries of type `build`, which
+the culture page follows live. Stopping or deleting the culture cancels
+its new batch; if Docker fails between removing the old app and
+renaming the new one, the culture fails rather than guess. `GET
+/deployments/:id/builds` lists the builds for the page's history. In
+the admin panel, a ZIP culture's **Redeploy** takes an optional new
+archive.
+
 ### 5.6 Recovery
 
 What happens when things go wrong outside a request: the worker dies

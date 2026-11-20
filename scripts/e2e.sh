@@ -56,7 +56,7 @@ remove_apps() {
 	for id in $ids; do
 		curl -s -o /dev/null -X DELETE --unix-socket "$socket" \
 			"http://localhost/id/petri-route-$id" || true
-		docker rm -f "petri-$id" >/dev/null 2>&1 || true
+		docker rm -f "petri-$id" "petri-$id-next" >/dev/null 2>&1 || true
 		docker network disconnect -f "petri-$id" "${EDGE_CONTAINER:-petri-dev-edge-1}" >/dev/null 2>&1 || true
 		docker network rm "petri-$id" >/dev/null 2>&1 || true
 		images=$(docker images -q "petri/$id")

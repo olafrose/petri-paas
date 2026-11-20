@@ -17,6 +17,7 @@ export {
 	LABELS,
 	LimitsNotEnforcedError,
 	networkName,
+	nextContainerName,
 	type ResourceLimits,
 } from "./docker-runtime.ts";
 export {

@@ -3,6 +3,7 @@ import {
 	type Database,
 	type DeploymentStatus,
 	deployments,
+	type Transaction,
 } from "@petri/database";
 import type { PreviewRoute } from "@petri/edge-proxy";
 import { networkName } from "@petri/runtime";
@@ -67,12 +68,11 @@ export async function syncRoutes(
 			const current = actual.find((entry) => entry.deploymentId === id);
 			if (current && sameRoute(current, route)) continue;
 			const added = await withDeploymentLock(db, id, async (tx) => {
-				const [row] = await tx
-					.select({ status: deployments.status })
-					.from(deployments)
-					.where(eq(deployments.id, id));
-				if (row?.status !== "ready") return false;
-				await edge.proxy.setRoute(route);
+				// Read again: a redeploy may have switched to a new version
+				// (and port) while this waited for the lock.
+				const fresh = (await readyRoutes(tx, edge, log, [id])).get(id);
+				if (!fresh) return false;
+				await edge.proxy.setRoute(fresh);
 				return true;
 			});
 			if (added) result.added.push(id);
@@ -110,8 +110,13 @@ export async function syncRoutes(
 	return result;
 }
 
-/** The route every ready deployment should have. */
-async function readyRoutes(db: Database, edge: EdgeRouting, log: Logger) {
+/** The route every ready deployment (or only those given) should have. */
+async function readyRoutes(
+	db: Database | Transaction,
+	edge: EdgeRouting,
+	log: Logger,
+	only?: string[],
+) {
 	// Each ready deployment runs its latest successful build.
 	const rows = await db
 		.selectDistinctOn([deployments.id], {
@@ -122,7 +127,13 @@ async function readyRoutes(db: Database, edge: EdgeRouting, log: Logger) {
 		})
 		.from(deployments)
 		.innerJoin(builds, eq(builds.deploymentId, deployments.id))
-		.where(and(eq(deployments.status, "ready"), eq(builds.status, "succeeded")))
+		.where(
+			and(
+				eq(deployments.status, "ready"),
+				eq(builds.status, "succeeded"),
+				only && inArray(deployments.id, only),
+			),
+		)
 		.orderBy(deployments.id, desc(builds.createdAt), desc(builds.id));
 
 	const routes = new Map<string, PreviewRoute>();

@@ -14,6 +14,11 @@ export interface TestGitServer {
 	caFile: string;
 	url(path?: string): string;
 	commits: { first: string; second: string; feature: string };
+	/**
+	 * Commits changed files to main of one of the extra repositories, as
+	 * a push would. Returns the new commit.
+	 */
+	push(repo: string, files: Record<string, string>): string;
 	requests: string[];
 	close(): Promise<void>;
 }
@@ -65,18 +70,29 @@ export async function startGitServer(
 	git(work, "commit", "--quiet", "-m", "feature");
 	const feature = git(work, "rev-parse", "HEAD");
 
-	for (const [name, files] of Object.entries(extraRepos)) {
-		const dir = join(root, `work-${name}`);
-		execFileSync("mkdir", ["-p", dir]);
-		git(dir, "init", "--quiet", "--initial-branch=main");
+	const writeFiles = (dir: string, files: Record<string, string>) => {
 		for (const [path, content] of Object.entries(files)) {
 			execFileSync("mkdir", ["-p", join(dir, path, "..")]);
 			writeFileSync(join(dir, path), content);
 		}
+	};
+	for (const [name, files] of Object.entries(extraRepos)) {
+		const dir = join(root, `work-${name}`);
+		execFileSync("mkdir", ["-p", dir]);
+		git(dir, "init", "--quiet", "--initial-branch=main");
+		writeFiles(dir, files);
 		git(dir, "add", ".");
 		git(dir, "commit", "--quiet", "-m", "app");
 		git(root, "clone", "--quiet", "--bare", dir, join(root, `${name}.git`));
 	}
+	const push = (repo: string, files: Record<string, string>) => {
+		const dir = join(root, `work-${repo}`);
+		writeFiles(dir, files);
+		git(dir, "add", ".");
+		git(dir, "commit", "--quiet", "-m", "change");
+		git(dir, "push", "--quiet", join(root, `${repo}.git`), "main");
+		return git(dir, "rev-parse", "HEAD");
+	};
 
 	const bare = join(root, "demo.git");
 	git(root, "clone", "--quiet", "--bare", work, bare);
@@ -179,6 +195,7 @@ export async function startGitServer(
 		caFile: certFile,
 		url: (path = "/demo.git") => `https://${TEST_HOST}:${port}${path}`,
 		commits: { first, second, feature },
+		push,
 		requests,
 		close: async () => {
 			server.closeAllConnections();

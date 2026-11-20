@@ -1,4 +1,9 @@
-import { deployment, deploymentEventList, project } from "@petri/contracts";
+import {
+	buildList,
+	deployment,
+	deploymentEventList,
+	project,
+} from "@petri/contracts";
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import {
@@ -6,12 +11,14 @@ import {
 	experimentLabel,
 	Hand,
 	Label,
+	MarginNote,
 	StatusStamp,
 } from "../../../../components/notebook/index.tsx";
 import { ApiRequestError, apiGet } from "../../../../lib/api.ts";
 import { isActive } from "../../../../lib/deployments.ts";
 import { requestCookie } from "../../../../lib/session.ts";
 import styles from "../../dashboard.module.css";
+import { BuildHistory } from "./build-history.tsx";
 import { BuildLog } from "./build-log.tsx";
 import { DeploymentActions } from "./deployment-actions.tsx";
 import { RuntimeLog } from "./runtime-log.tsx";
@@ -36,16 +43,22 @@ export default async function DeploymentPage({
 			notFound();
 		throw error;
 	});
-	const [owner, history] = await Promise.all([
+	const [owner, history, buildHistory] = await Promise.all([
 		apiGet(`/api/v1/projects/${current.projectId}`, project, options),
 		apiGet(
 			`/api/v1/deployments/${id}/events?limit=500`,
 			deploymentEventList,
 			options,
 		),
+		apiGet(`/api/v1/deployments/${id}/builds`, buildList, options),
 	]);
 	const { source, latestBuild } = current;
 	const active = isActive(current.status);
+	// A redeploy of a ready culture: the new build runs next to it.
+	const building =
+		latestBuild?.status === "queued" || latestBuild?.status === "running";
+	const newBatchFailed =
+		current.status === "ready" && latestBuild?.status === "failed";
 
 	return (
 		<>
@@ -59,6 +72,14 @@ export default async function DeploymentPage({
 				<Hand as="h1">{current.name}</Hand>
 				<StatusStamp status={current.status} />
 			</div>
+			{building && current.status === "ready" && (
+				<p>
+					<MarginNote>growing a new batch</MarginNote>{" "}
+					<span className={styles.soft}>
+						— the current one keeps answering until the new one is healthy
+					</span>
+				</p>
+			)}
 
 			<dl className={styles.facts}>
 				<dt>Preview</dt>
@@ -124,13 +145,20 @@ export default async function DeploymentPage({
 				</dd>
 				{latestBuild?.errorMessage && (
 					<>
-						<dt>Error</dt>
-						<dd className={styles.error}>{latestBuild.errorMessage}</dd>
+						<dt>{newBatchFailed ? "Last redeploy" : "Error"}</dt>
+						<dd className={styles.error}>
+							{latestBuild.errorMessage}
+							{newBatchFailed && " (the previous batch keeps answering)"}
+						</dd>
 					</>
 				)}
 			</dl>
 
-			<DeploymentActions id={current.id} actions={current.actions} />
+			<DeploymentActions
+				id={current.id}
+				actions={current.actions}
+				zip={source.type === "zip"}
+			/>
 
 			<section className={styles.section}>
 				<Hand as="h2">History</Hand>
@@ -139,17 +167,26 @@ export default async function DeploymentPage({
 
 			<section className={styles.section}>
 				<Hand as="h2">App output</Hand>
-				{/* Asked again whenever the status changes. */}
-				<RuntimeLog key={current.status} deploymentId={current.id} />
+				{/* Asked again whenever the status or the running batch changes. */}
+				<RuntimeLog
+					key={`${current.status}:${latestBuild?.id}:${latestBuild?.status}`}
+					deploymentId={current.id}
+				/>
+			</section>
+
+			<section className={styles.section}>
+				<Hand as="h2">Builds</Hand>
+				<BuildHistory builds={buildHistory.items} />
 			</section>
 
 			<section className={styles.section}>
 				<Hand as="h2">Build log</Hand>
 				{latestBuild ? (
 					<BuildLog
+						key={latestBuild.id}
 						deploymentId={current.id}
 						buildId={latestBuild.id}
-						live={active}
+						live={active || building}
 					/>
 				) : (
 					<p className={styles.soft}>No build yet.</p>

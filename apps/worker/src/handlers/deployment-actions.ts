@@ -15,7 +15,12 @@ import {
 	updateStatus,
 } from "@petri/deployment-core";
 import type { JobHandler } from "@petri/jobs";
-import { type DockerRuntime, networkName } from "@petri/runtime";
+import {
+	containerName,
+	type DockerRuntime,
+	networkName,
+	nextContainerName,
+} from "@petri/runtime";
 import { eq } from "drizzle-orm";
 import type { Logger } from "pino";
 import type { EdgeRouting } from "../edge-routing.ts";
@@ -171,7 +176,7 @@ export function deploymentStartHandler(
 			const healthy = await checkHealth(
 				runtime,
 				settings,
-				deploymentId,
+				containerName(deploymentId),
 				networkName(deploymentId),
 				started.port,
 				job.signal,
@@ -240,7 +245,7 @@ export function deploymentStartHandler(
 
 /**
  * Removes everything the deployment ran on: its route, container,
- * network, the images of all its builds and its uploaded archive. The deployment, its
+ * network, the images of all its builds and its uploaded archives. The deployment, its
  * builds, history and build logs remain; it ends as `deleted`.
  *
  * Errors are thrown so the job is retried. A deployment job still running
@@ -275,19 +280,23 @@ export function deploymentDeleteHandler(
 			// remove it.
 			await edge.unpublish(deploymentId);
 			await runtime.removeContainer(deploymentId);
+			// A new version that was being grown next to it (a redeploy).
+			await runtime.removeContainerNamed(nextContainerName(deploymentId));
 			await runtime.removeNetwork(deploymentId);
 			const buildRows = await tx
-				.select({ id: builds.id })
+				.select({ id: builds.id, source: builds.source })
 				.from(builds)
 				.where(eq(builds.deploymentId, deploymentId));
+			const sources = [deployment.source, ...buildRows.map((b) => b.source)];
 			for (const build of buildRows) {
 				await runtime.removeImage(imageName(deploymentId, build.id));
 			}
-			if (deployment.source.type === "zip") {
-				await rm(
-					join(settings.uploadsDir, `${deployment.source.uploadId}.zip`),
-					{ force: true },
-				);
+			// Each redeploy with a new archive brought its own.
+			for (const source of sources) {
+				if (source?.type !== "zip") continue;
+				await rm(join(settings.uploadsDir, `${source.uploadId}.zip`), {
+					force: true,
+				});
 			}
 
 			await changeStatus(tx, deploymentId, "deleted", {
