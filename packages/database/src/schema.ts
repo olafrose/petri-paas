@@ -88,9 +88,12 @@ export type DeploymentSource =
 
 /** How to build a deployment. Stored as JSON. */
 export interface BuildOptions {
-	/** "auto" uses the Dockerfile if present (buildpacks come later). */
-	strategy: "auto" | "dockerfile";
-	/** Build arguments. Visible in the image; never use them for secrets. */
+	/** "auto" uses the Dockerfile if present, else buildpacks. */
+	strategy: "auto" | "dockerfile" | "buildpacks";
+	/**
+	 * Build arguments; for buildpacks, their settings. A Dockerfile's are
+	 * visible in the image; never use them for secrets.
+	 */
 	args: Record<string, string>;
 }
 

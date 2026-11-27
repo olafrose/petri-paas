@@ -219,11 +219,22 @@ new one.
 
 ## 2. Grow a culture
 
-The app needs a **Dockerfile** and must answer HTTP on one port, on all
-interfaces (\`0.0.0.0\`), not only localhost. The port comes from
-\`EXPOSE\` in the Dockerfile, or set \`build.port\`. Any HTTP answer below
-500 counts as healthy, if it comes within the health-check time (see
-the settings).
+The app must answer HTTP on one port, on all interfaces
+(\`0.0.0.0\`), not only localhost. Any HTTP answer below 500 counts as
+healthy, if it comes within the health-check time (see the settings).
+
+- With a **Dockerfile**, petri. builds it. The port comes from
+  \`EXPOSE\`, or set \`build.port\`.
+- Without one, **buildpacks** (Paketo) build Node.js, Python, Go, Java,
+  Ruby, PHP and .NET apps from their usual files (\`package.json\`,
+  \`requirements.txt\`, \`go.mod\`, …). The app must listen on
+  \`$PORT\` (8080, or \`build.port\`). Node.js starts with
+  \`npm start\`; for Python, add a \`Procfile\`
+  (\`web: gunicorn --bind 0.0.0.0:$PORT app:app\`). The first such build
+  takes longer.
+- \`build.strategy\` is \`auto\` (the Dockerfile if there is one, else
+  buildpacks); \`dockerfile\` or \`buildpacks\` insists on one. The
+  build log says which was used.
 
 Replace the \`<…>\` placeholders. From a public Git repository
 (HTTPS):
@@ -250,8 +261,8 @@ curl -X POST ${api}/deployments/upload \\
   experiment's cultures with
   \`GET ${api}/deployments?project=<experiment-slug>\`.
 - \`name\` tells cultures apart (defaults to the Git ref, or "upload").
-- \`source.directory\` (Git) or \`directory\` (ZIP): where the
-  Dockerfile is, if not at the top.
+- \`source.directory\` (Git) or \`directory\` (ZIP): where the app
+  (or its Dockerfile) is, if not at the top.
 - \`lifecycle\` defaults to temporary, ${TTL_HOURS.default} hours
   (\`{"mode": "temporary", "ttlHours": 72}\`, at most ${TTL_HOURS.max}).
   Use \`{"mode": "permanent"}\` only if your user asks.
@@ -271,7 +282,9 @@ curl -X POST ${api}/deployments/upload \\
   moves it to another address (\`{"subdomain": "<new-subdomain>"}\`):
   a ready culture answers there within seconds, and no longer at the
   old address. Rename instead of growing a new culture for a typo.
-- \`build.args\` are stored in the image: never put secrets there.
+- \`build.args\`: a Dockerfile's build arguments, stored in the image,
+  so never put secrets there; for buildpacks, their settings (e.g.
+  \`{"BP_NODE_VERSION": "22"}\`).
 - Check \`GET ${api}/settings\` before uploading: it lists the size,
   time and memory limits.
 

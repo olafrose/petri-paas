@@ -2,6 +2,7 @@ import { createWriteStream } from "node:fs";
 import { mkdir, rm } from "node:fs/promises";
 import { join } from "node:path";
 import {
+	type BuildProvider,
 	buildImage,
 	extractZip,
 	fetchGitSource,
@@ -588,22 +589,32 @@ async function buildFromSource(
 	signal: AbortSignal,
 ) {
 	const { db, settings, deployment, source, buildId } = run;
-	await buildImage({
-		sourceDir: workspace.source,
-		directory: source.directory,
-		imageName: workspace.imageName,
-		outputFile: workspace.imageArchive,
-		buildArgs: deployment.buildOptions.args,
-		buildkitHost: settings.buildkitHost,
-		buildctlPath: settings.buildctlPath,
-		signal,
-		...(settings.buildTimeoutMs && { timeoutMs: settings.buildTimeoutMs }),
-		onLog: (line) => workspace.write(`${line}\n`),
-	});
-	await db
-		.update(builds)
-		.set({ provider: "dockerfile" })
-		.where(eq(builds.id, buildId));
+	let provider: BuildProvider | null = null;
+	try {
+		await buildImage({
+			sourceDir: workspace.source,
+			directory: source.directory,
+			imageName: workspace.imageName,
+			outputFile: workspace.imageArchive,
+			strategy: deployment.buildOptions.strategy,
+			buildArgs: deployment.buildOptions.args,
+			port: deployment.internalPort ?? undefined,
+			buildkitHost: settings.buildkitHost,
+			buildctlPath: settings.buildctlPath,
+			signal,
+			...(settings.buildTimeoutMs && { timeoutMs: settings.buildTimeoutMs }),
+			onStrategy: (choice) => {
+				workspace.note(choice.reason);
+				provider = choice.provider;
+			},
+			onLog: (line) => workspace.write(`${line}\n`),
+		});
+	} finally {
+		// Also for a failed build: it says what failed.
+		if (provider) {
+			await db.update(builds).set({ provider }).where(eq(builds.id, buildId));
+		}
+	}
 }
 
 /** Loads the built image into Docker and finds the app's port. */

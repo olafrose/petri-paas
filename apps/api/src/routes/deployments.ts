@@ -112,6 +112,7 @@ function toBuild(row: DeploymentRow, build: BuildRow): BuildSummary {
 		status: build.status,
 		ref: source.type === "git" ? source.ref : null,
 		commit: build.commit,
+		provider: build.provider,
 		createdAt: build.createdAt.toISOString(),
 		startedAt: build.startedAt?.toISOString() ?? null,
 		finishedAt: build.finishedAt?.toISOString() ?? null,
@@ -121,10 +122,10 @@ function toBuild(row: DeploymentRow, build: BuildRow): BuildSummary {
 
 /**
  * The deployment's entity tag: it changes with the status or the latest
- * build (a new one, its status, or the commit a Git build fetched),
- * what someone following a build waits for, and with its name, address or lifetime: a 304 must not
- * leave anyone with an old URL or expiry. Weak, since other fields may
- * change under the same tag.
+ * build (a new one, its status, the commit a Git build fetched, or what
+ * builds it), what someone following a build waits for, and with its
+ * name, address or lifetime: a 304 must not leave anyone with an old URL
+ * or expiry. Weak, since other fields may change under the same tag.
  */
 export function followTag(deployment: Deployment): string {
 	const build = deployment.latestBuild;
@@ -133,6 +134,7 @@ export function followTag(deployment: Deployment): string {
 		build?.id,
 		build?.status,
 		build?.commit,
+		build?.provider,
 		deployment.name,
 		deployment.url,
 		deployment.lifecycleMode,
@@ -828,7 +830,7 @@ export const deploymentRoutes: FastifyPluginAsyncZod<
 				tags,
 				summary: "Get a deployment",
 				description: [
-					"The `ETag` header changes with the status, the latest build (a new one, its status, or its commit), the name or `url` (a rename), and the lifetime (`lifecycleMode`, `expiresAt`).",
+					"The `ETag` header changes with the status, the latest build (a new one, its status, its commit or its provider), the name or `url` (a rename), and the lifetime (`lifecycleMode`, `expiresAt`).",
 					"",
 					"`wait=<seconds>` (at most 60) follows a build without polling: the answer comes as soon as the tag differs from `If-None-Match` (send the `ETag` of the previous answer), or from the tag when the request arrived if there is none. If nothing changes in time, 304 with the same tag; ask again. The server answers after 55 seconds at the latest.",
 					"",

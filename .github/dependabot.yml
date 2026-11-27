@@ -20,3 +20,15 @@ updates:
       interval: weekly
     cooldown:
       default-days: 3
+
+  # Paketo's builder and run image for apps without a Dockerfile: they
+  # belong together, so they are updated together.
+  - package-ecosystem: docker
+    directory: /packages/build-engine/buildpacks
+    schedule:
+      interval: weekly
+    cooldown:
+      default-days: 3
+    groups:
+      paketo:
+        patterns: ["paketobuildpacks/*"]

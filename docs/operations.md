@@ -36,7 +36,10 @@ internet but nothing on the LAN. Both are enforced by the host firewall
   Disk       100 GB, SSD, thin-provisioned         BuildKit cache (up to 20 GB), one image per
                                                    preview, uploads, logs, database
 
-8 GB runs about 8--10 previews at once. In Proxmox:
+8 GB runs about 8--10 previews at once. Apps built with buildpacks
+(no Dockerfile) are large, about 600 MB an image, and the first such
+build pulls Paketo's builder and run image (about 1 GB, kept in the
+BuildKit cache). In Proxmox:
 
 -   **Memory ballooning off.** petri. relies on the memory limits Docker
     enforces; memory taken away underneath the VM brings in the kernel's

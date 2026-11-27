@@ -80,6 +80,28 @@ beforeAll(async () => {
 			Dockerfile: `FROM busybox:1.37\nRUN echo ${randomUUID()} && sleep 30\n`,
 		},
 		nested: { "site/Dockerfile": web(8080) },
+		// No Dockerfile: built with buildpacks.
+		"node-app": {
+			"package.json": JSON.stringify({
+				name: "node-app",
+				version: "1.0.0",
+				scripts: { start: "node server.js" },
+			}),
+			"server.js": [
+				"const http = require('http');",
+				"http.createServer((q, r) => r.end('hello from node\\n'))",
+				"  .listen(process.env.PORT, () => console.log('node listening'));",
+			].join("\n"),
+		},
+		"python-app": {
+			"requirements.txt": "gunicorn==23.0.0\n",
+			"app.py": [
+				"def app(environ, start_response):",
+				"    start_response('200 OK', [('Content-Type', 'text/plain')])",
+				"    return [b'hello from python\\n']",
+			].join("\n"),
+			Procfile: "web: gunicorn --bind 0.0.0.0:$PORT app:app\n",
+		},
 	});
 	settings = {
 		workspaceDir: join(base, "workspaces"),
@@ -266,6 +288,32 @@ describe("successful deployments", { timeout: 120_000 }, () => {
 		expect((await stateOf(deploymentId, buildId)).deployment?.status).toBe(
 			"ready",
 		);
+	});
+});
+
+// The first one pulls Paketo's builder and run image (about 1 GB).
+describe("apps without a Dockerfile", { timeout: 600_000 }, () => {
+	test.each([
+		["node-app", "hello from node\n"],
+		["python-app", "hello from python\n"],
+	])("%s grows with buildpacks and answers", async (repo, body) => {
+		const { deploymentId, buildId, run } = await deploy(git(repo));
+		await run();
+		const state = await stateOf(deploymentId, buildId);
+
+		expect(state.deployment?.status).toBe("ready");
+		expect(state.build).toMatchObject({
+			status: "succeeded",
+			provider: "buildpack",
+			port: 8080,
+		});
+		expect(state.log).toContain(
+			"[petri] No Dockerfile: building with buildpacks (Paketo)",
+		);
+		expect(await viaEdge(state.deployment?.subdomain as string)).toEqual({
+			status: 200,
+			body,
+		});
 	});
 });
 

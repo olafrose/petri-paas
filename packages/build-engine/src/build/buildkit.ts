@@ -1,8 +1,17 @@
 import { spawn } from "node:child_process";
 import { createWriteStream, type WriteStream } from "node:fs";
-import { lstat, mkdtemp, realpath, rm, stat } from "node:fs/promises";
+import {
+	lstat,
+	mkdir,
+	mkdtemp,
+	realpath,
+	rm,
+	stat,
+	writeFile,
+} from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, relative, resolve, sep } from "node:path";
+import { fileURLToPath } from "node:url";
 
 export type BuildErrorCode =
 	| "invalid_directory"
@@ -23,6 +32,12 @@ export class BuildError extends Error {
 	}
 }
 
+/** How to build: `auto` uses a Dockerfile if there is one, else buildpacks. */
+export type BuildStrategy = "auto" | "dockerfile" | "buildpacks";
+
+/** What built the image. */
+export type BuildProvider = "dockerfile" | "buildpack";
+
 export interface BuildImageOptions {
 	/** The fetched or extracted source. */
 	sourceDir: string;
@@ -32,7 +47,15 @@ export interface BuildImageOptions {
 	imageName: string;
 	/** Where to write the image (Docker image archive). */
 	outputFile: string;
+	/** Defaults to `auto`. */
+	strategy?: BuildStrategy | undefined;
+	/**
+	 * Build arguments for a Dockerfile; for buildpacks, their settings
+	 * (e.g. BP_NODE_VERSION), which stay out of the image.
+	 */
 	buildArgs?: Record<string, string>;
+	/** Buildpacks only: the port the app listens on (`PORT`), 8080 by default. */
+	port?: number | undefined;
 	/** BuildKit daemon address, e.g. tcp://buildkitd:1234. */
 	buildkitHost: string;
 	buildctlPath?: string;
@@ -43,10 +66,17 @@ export interface BuildImageOptions {
 	maxLogBytes?: number;
 	/** Receives the build output, line by line. */
 	onLog?: (line: string) => void;
+	/** Told which provider builds the image, and why, before it starts. */
+	onStrategy?: (choice: StrategyChoice) => void;
+}
+
+export interface StrategyChoice {
+	provider: BuildProvider;
+	reason: string;
 }
 
 export interface BuildImageResult {
-	provider: "dockerfile";
+	provider: BuildProvider;
 	imageName: string;
 	outputFile: string;
 }
@@ -54,17 +84,28 @@ export interface BuildImageResult {
 /** How long a build may take. */
 export const DEFAULT_BUILD_TIMEOUT_MS = 15 * 60 * 1000;
 const DEFAULT_MAX_LOG_BYTES = 5 * 1024 * 1024;
+/** The port a buildpack app listens on unless `port` says otherwise. */
+export const DEFAULT_BUILDPACK_PORT = 8080;
+
+/** The Dockerfile that builds with buildpacks (see its comments). */
+const BUILDPACKS_DIR = fileURLToPath(
+	new URL("../../buildpacks/", import.meta.url),
+);
+/** Names of buildpack settings: they become file names. */
+const SETTING_NAME = /^[A-Za-z_][A-Za-z0-9_]*$/;
 
 /**
- * Builds a Dockerfile with BuildKit and writes the image to a file. The
- * daemon runs rootless, in its own container; this only drives it with
- * `buildctl`.
+ * Builds a Dockerfile, or the source with buildpacks, with BuildKit and
+ * writes the image to a file. The daemon runs rootless, in its own
+ * container; this only drives it with `buildctl`. Buildpacks run in
+ * BuildKit too, from a Dockerfile of petri.'s (`buildpacks/`).
  */
 export async function buildImage(
 	options: BuildImageOptions,
 ): Promise<BuildImageResult> {
 	const context = await resolveContext(options.sourceDir, options.directory);
-	await requireDockerfile(context);
+	const choice = await chooseStrategy(context, options.strategy ?? "auto");
+	options.onStrategy?.(choice);
 
 	const args = [
 		"--addr",
@@ -74,8 +115,6 @@ export async function buildImage(
 		"dockerfile.v0",
 		"--local",
 		`context=${context}`,
-		"--local",
-		`dockerfile=${context}`,
 		"--opt",
 		"filename=Dockerfile",
 		"--progress",
@@ -83,8 +122,29 @@ export async function buildImage(
 		"--output",
 		`type=docker,name=${options.imageName},dest=${options.outputFile}`,
 	];
-	for (const [key, value] of Object.entries(options.buildArgs ?? {})) {
-		args.push("--opt", `build-arg:${key}=${value}`);
+
+	const buildArgs = Object.entries(options.buildArgs ?? {});
+	if (choice.provider === "dockerfile") {
+		args.push("--local", `dockerfile=${context}`);
+		for (const [key, value] of buildArgs) {
+			args.push("--opt", `build-arg:${key}=${value}`);
+		}
+	} else {
+		const invalid = buildArgs.find(([key]) => !SETTING_NAME.test(key));
+		if (invalid) {
+			throw new BuildError(
+				"build_failed",
+				`Invalid build argument "${invalid[0]}"`,
+			);
+		}
+		args.push(
+			"--local",
+			`dockerfile=${BUILDPACKS_DIR}`,
+			"--opt",
+			"context:platform=local:platform",
+			"--opt",
+			`build-arg:PORT=${options.port ?? DEFAULT_BUILDPACK_PORT}`,
+		);
 	}
 
 	const home = await mkdtemp(join(tmpdir(), "petri-buildctl-home-"));
@@ -95,6 +155,15 @@ export async function buildImage(
 			)
 		: null;
 	try {
+		if (choice.provider === "buildpack") {
+			// The buildpacks read their settings from one file per variable.
+			const platform = join(home, "platform");
+			await mkdir(platform);
+			for (const [key, value] of buildArgs) {
+				await writeFile(join(platform, key), value);
+			}
+			args.push("--local", `platform=${platform}`);
+		}
 		await runBuildctl(options.buildctlPath ?? "buildctl", args, {
 			env: { PATH: process.env.PATH, HOME: home, LANG: "C" },
 			timeoutMs: options.timeoutMs ?? DEFAULT_BUILD_TIMEOUT_MS,
@@ -105,7 +174,7 @@ export async function buildImage(
 			},
 		});
 		return {
-			provider: "dockerfile",
+			provider: choice.provider,
 			imageName: options.imageName,
 			outputFile: options.outputFile,
 		};
@@ -145,21 +214,47 @@ async function resolveContext(
 	return target;
 }
 
-async function requireDockerfile(context: string) {
-	try {
-		const info = await lstat(join(context, "Dockerfile"));
-		if (info.isFile()) return;
+/**
+ * A Dockerfile if the strategy allows one and there is one, else
+ * buildpacks. A Dockerfile that is a link or a directory is refused
+ * rather than skipped: whoever added it meant it to be used.
+ */
+export async function chooseStrategy(
+	context: string,
+	strategy: BuildStrategy,
+): Promise<StrategyChoice> {
+	if (strategy === "buildpacks") {
+		return {
+			provider: "buildpack",
+			reason: "Building with buildpacks (build.strategy: buildpacks)",
+		};
+	}
+	const info = await lstat(join(context, "Dockerfile")).catch(() => null);
+	if (info && !info.isFile()) {
 		throw new BuildError(
 			"no_dockerfile",
 			"The Dockerfile must be a regular file, not a link or directory",
 		);
-	} catch (error) {
-		if (error instanceof BuildError) throw error;
+	}
+	if (info) {
+		return {
+			provider: "dockerfile",
+			reason:
+				strategy === "dockerfile"
+					? "Building the Dockerfile (build.strategy: dockerfile)"
+					: "Building the Dockerfile",
+		};
+	}
+	if (strategy === "dockerfile") {
 		throw new BuildError(
 			"no_dockerfile",
-			"No Dockerfile found. Add one to the build directory (automatic builds without a Dockerfile come later).",
+			'No Dockerfile found. Add one to the build directory, or use build.strategy "auto" to build with buildpacks.',
 		);
 	}
+	return {
+		provider: "buildpack",
+		reason: "No Dockerfile: building with buildpacks (Paketo)",
+	};
 }
 
 function runBuildctl(
@@ -240,7 +335,8 @@ function abortReason(timeout: AbortSignal): BuildError {
 		: new BuildError("cancelled", "The build was cancelled");
 }
 
-function classify(tail: string[]): BuildError {
+function classify(lines: string[]): BuildError {
+	const tail = lines.map((line) => line.replace(ANSI_ESCAPE, ""));
 	const text = tail.join("\n");
 	if (
 		/connection refused|no such host|failed to dial|context deadline exceeded.*dial/i.test(
@@ -250,6 +346,18 @@ function classify(tail: string[]): BuildError {
 		return new BuildError(
 			"buildkit_unavailable",
 			"The build service is not reachable",
+		);
+	}
+	// Buildpack builds: the reasons petri.'s buildpack Dockerfile and the
+	// lifecycle give, without the failed step's script around them.
+	const startCommand = text.match(/No start command found: .*/);
+	if (startCommand) {
+		return new BuildError("build_failed", `Build failed: ${startCommand[0]}`);
+	}
+	if (/No buildpack groups passed detection/.test(text)) {
+		return new BuildError(
+			"build_failed",
+			"Build failed: no buildpack recognizes the source. Buildpacks look for e.g. package.json (Node.js), requirements.txt or pyproject.toml (Python), go.mod (Go); or add a Dockerfile.",
 		);
 	}
 	// BuildKit's summary, e.g. `process "/bin/sh -c npm ci" did not complete
@@ -263,6 +371,10 @@ function classify(tail: string[]): BuildError {
 		`Build failed: ${summary.replace(/^(error|ERROR):\s*/, "").slice(0, 500)}`,
 	);
 }
+
+// Colors in buildpack output.
+// biome-ignore lint/suspicious/noControlCharactersInRegex: matches escapes
+const ANSI_ESCAPE = /\u001b\[[0-9;]*m/g;
 
 /** A log file that stops growing at a size limit, with a note saying so. */
 class CappedLog {

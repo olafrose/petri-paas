@@ -39,7 +39,10 @@ export function DeployForm({
 			project: text("project"),
 			name: text("name"),
 			subdomain: text("subdomain"),
-			build: { strategy: "auto", ...(port && { port: Number(port) }) },
+			build: {
+				strategy: text("strategy") ?? "auto",
+				...(port && { port: Number(port) }),
+			},
 			lifecycle:
 				mode === "permanent"
 					? { mode }
@@ -141,7 +144,7 @@ export function DeployForm({
 						</Field>
 						<Field
 							label="Directory"
-							hint="Optional: where the Dockerfile is"
+							hint="Optional: where the app is"
 							error={fieldError("source.directory")}
 						>
 							<input name="directory" placeholder="e.g. app" />
@@ -152,14 +155,14 @@ export function DeployForm({
 				<>
 					<Field
 						label="ZIP archive"
-						hint="Up to 100 MB, with a Dockerfile"
+						hint="Up to 100 MB"
 						error={fieldError("archive")}
 					>
 						<input name="archive" type="file" accept=".zip,application/zip" />
 					</Field>
 					<Field
 						label="Directory"
-						hint="Optional: where the Dockerfile is inside the archive"
+						hint="Optional: where the app is inside the archive"
 						error={fieldError("directory")}
 					>
 						<input name="directory" placeholder="e.g. app" />
@@ -200,12 +203,26 @@ export function DeployForm({
 				</Field>
 				<Field
 					label="Port"
-					hint="Optional: taken from EXPOSE"
+					hint="Optional: taken from EXPOSE; 8080 for buildpacks"
 					error={fieldError("build.port")}
 				>
 					<input name="port" type="number" min={1} max={65535} />
 				</Field>
 			</div>
+
+			<Field
+				label="Build"
+				hint="Without a Dockerfile, buildpacks build Node.js, Python, Go, Java, Ruby, PHP and .NET apps"
+				error={fieldError("build.strategy")}
+			>
+				<select name="strategy" defaultValue="auto">
+					<option value="auto">
+						The Dockerfile if there is one, else buildpacks
+					</option>
+					<option value="dockerfile">Dockerfile</option>
+					<option value="buildpacks">Buildpacks</option>
+				</select>
+			</Field>
 
 			<Field
 				label="Subdomain"

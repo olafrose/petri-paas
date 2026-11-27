@@ -139,12 +139,102 @@ describe("building", { timeout: 120_000 }, () => {
 	});
 });
 
-describe("refused before building", () => {
-	test("no Dockerfile", async () => {
-		const { base, source } = project({ "index.html": "x" });
-		expect((await failure(buildImage(options(base, source)))).code).toBe(
-			"no_dockerfile",
+/** The image config in a Docker image archive. */
+function imageConfig(archive: string) {
+	const read = (name: string) =>
+		JSON.parse(execFileSync("tar", ["-xOf", archive, name]).toString());
+	const [manifest] = read("manifest.json");
+	return read(manifest.Config).config as {
+		Env: string[];
+		ExposedPorts: Record<string, unknown>;
+		User: string;
+		Entrypoint: string[];
+	};
+}
+
+/** A Node.js app without a Dockerfile, new to BuildKit's cache. */
+const nodeApp = () => ({
+	"package.json": JSON.stringify({
+		name: "app",
+		version: "1.0.0",
+		scripts: { start: "node server.js" },
+	}),
+	"server.js":
+		"require('http').createServer((q, r) => r.end('hi')).listen(process.env.PORT);\n",
+	"fresh.txt": fresh(),
+});
+
+// The first one pulls Paketo's builder and run image (about 1 GB).
+describe("buildpacks", { timeout: 600_000 }, () => {
+	test("builds an app without a Dockerfile, with its settings and port", async () => {
+		const { base, source } = project(nodeApp());
+		const lines: string[] = [];
+		const choices: unknown[] = [];
+		const result = await buildImage(
+			options(base, source, {
+				buildArgs: { BP_NODE_VERSION: "22" },
+				port: 5000,
+				onLog: (line) => lines.push(line),
+				onStrategy: (choice) => choices.push(choice),
+			}),
 		);
+		expect(result.provider).toBe("buildpack");
+		expect(choices).toEqual([
+			{
+				provider: "buildpack",
+				reason: "No Dockerfile: building with buildpacks (Paketo)",
+			},
+		]);
+		const log = lines.join("\n");
+		expect(log).toMatch(
+			/Selected Node Engine version \(using BP_NODE_VERSION\): 22\./,
+		);
+		expect(log).toContain('Start command: process "web"');
+
+		const config = imageConfig(result.outputFile);
+		expect(config.Env).toContain("PORT=5000");
+		expect(Object.keys(config.ExposedPorts)).toEqual(["5000/tcp"]);
+		expect(config.Entrypoint).toEqual(["/cnb/start"]);
+		// The run image's user, not root and not the build user.
+		expect(config.User).toBe("1002:1001");
+		// Settings stay out of the image, unlike a Dockerfile's arguments.
+		expect(config.Env.join("\n")).not.toContain("BP_NODE_VERSION");
+	});
+
+	test("listens on 8080 unless told otherwise", async () => {
+		const { base, source } = project(nodeApp());
+		const result = await buildImage(
+			options(base, source, { strategy: "buildpacks" }),
+		);
+		expect(imageConfig(result.outputFile).Env).toContain("PORT=8080");
+	});
+
+	test("source no buildpack recognizes", async () => {
+		const { base, source } = project({ "index.html": "x" });
+		const error = await failure(buildImage(options(base, source)));
+		expect(error.code).toBe("build_failed");
+		expect(error.message).toContain("no buildpack recognizes the source");
+	});
+
+	test("a Python app without a start command", async () => {
+		const { base, source } = project({
+			"requirements.txt": "",
+			"app.py": "print('hi')\n",
+		});
+		const error = await failure(buildImage(options(base, source)));
+		expect(error.message).toMatch(
+			/^Build failed: No start command found: add a Procfile/,
+		);
+	});
+});
+
+describe("refused before building", () => {
+	test("no Dockerfile when the strategy asks for one", async () => {
+		const { base, source } = project({ "index.html": "x" });
+		const error = await failure(
+			buildImage(options(base, source, { strategy: "dockerfile" })),
+		);
+		expect(error.code).toBe("no_dockerfile");
 	});
 
 	test("a Dockerfile that is a symbolic link", async () => {
