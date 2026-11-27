@@ -977,6 +977,42 @@ Buildpacks (Paketo), as architecture section 8.3 plans.
 into cultures, under the same limits and network rules as Dockerfile
 builds.
 
+**Spike** (November 2026; the owner chose to build it this way):
+buildpacks run inside BuildKit, without a
+Docker daemon and without `creator`. `creator` needs a daemon, a
+registry or an OCI layout of the run image to export to; instead,
+petri. generates a two-stage Dockerfile and builds it like any other:
+
+1.  In Paketo's builder (`paketobuildpacks/ubuntu-noble-builder`), as
+    its `cnb` user: copy the source to `/workspace`, run the lifecycle's
+    `detector` and `builder`, and keep only the layers marked
+    `launch = true`.
+2.  On the matching run image (`paketobuildpacks/ubuntu-noble-run`):
+    copy `/layers`, `/workspace` and the lifecycle's `launcher`, with
+    `/cnb/process/<type>` links to it, as the exporter makes them; the
+    entrypoint runs the default process; `ENV PORT` and `EXPOSE` give
+    the port.
+
+The result is a Docker image archive, loaded as now. On the dev
+machine, a Node.js app (npm, no Dockerfile) and a Python app (pip,
+Procfile with gunicorn) each built in about 14 seconds once the builder
+was pulled (about 50 seconds the first time). Both answered on `$PORT`
+under the app limits (512 MB, one CPU, capabilities dropped). Both
+images are about 590 MB. The runtime, the network rules and the time
+limit stay as they are; the build log shows the detected buildpacks.
+Source that no buildpack recognizes fails with "No buildpack groups
+passed detection." A Python app without a Procfile builds with `python`
+as its process, which exits at once: the health check fails it, and the
+log can say why.
+
+Compared with `pack`: no buildpack cache between builds (each build
+installs Node, Python and the packages again; a BuildKit cache mount
+could keep them later), no SBOM, and no rebase metadata (petri. never
+rebases). To build: builder and run image pinned in
+a template file that Dependabot can update; `build.args` passed as
+buildpack settings (`/platform/env`, e.g. `BP_NODE_VERSION`), so they
+stay out of the image.
+
 ### Not in this phase
 
 -   Runtime environment variables (architecture 8.3): apps that need
