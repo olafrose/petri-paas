@@ -284,9 +284,9 @@ The reasons for each choice are recorded in section 5.2.
   Image building          BuildKit (standalone    Dockerfile builds
                           buildkitd)              
 
-  Automatic builds        Paketo Buildpacks or    Applications without
-                          another compatible      Dockerfiles
-                          provider                
+  Automatic builds        Paketo Buildpacks, run  Applications without
+                          inside BuildKit         Dockerfiles
+                                                  
 
   API documentation       OpenAPI / Swagger       API contract
 
@@ -607,6 +607,30 @@ The user may override automatic detection and configure:
 
 Automatic port detection may be helpful, but must not be the only way to
 configure the application port.
+
+**Buildpacks without a Docker daemon.** `pack` runs the buildpack
+lifecycle with a Docker daemon or a registry to export the image to;
+the worker has neither, on purpose (builds stay in rootless BuildKit,
+behind the build network's egress rules). Instead, a buildpack build is
+a Dockerfile build of petri.'s own, `packages/build-engine/buildpacks/
+Dockerfile`, with the source as its context:
+
+1.  In Paketo's builder image, the lifecycle's `detector` and `builder`
+    run as the builder's unprivileged user; only the layers marked
+    `launch = true` are kept.
+2.  On the matching run image, the second stage assembles what the
+    lifecycle's exporter would: the layers, the app directory (owned by
+    the build user, so the app can't change it) and the `launcher`,
+    started through `/cnb/process/<type>` for the default process.
+    `PORT` (8080 or `build.port`) is set and exposed, so the image
+    looks like any other to the runtime.
+
+`build.args` become the buildpacks' settings (files in
+`/platform/env`, e.g. `BP_NODE_VERSION`) instead of build arguments,
+so they stay out of the image. There is no buildpack cache between
+builds, no SBOM and no rebase metadata; BuildKit caches the builder,
+the run image and unchanged steps. Builder and run image are pinned in
+that Dockerfile and updated by Dependabot.
 
 ### 8.4 Build lifecycle
 

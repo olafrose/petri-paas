@@ -10,6 +10,11 @@ const RESULT: Record<BuildSummary["status"], string> = {
 	cancelled: "cancelled",
 };
 
+const PROVIDER: Record<NonNullable<BuildSummary["provider"]>, string> = {
+	dockerfile: "Dockerfile",
+	buildpack: "buildpacks",
+};
+
 /** Every build of the culture, newest first: what it built and how it went. */
 export function BuildHistory({ builds }: { builds: BuildSummary[] }) {
 	if (builds.length === 0) {
@@ -32,6 +37,7 @@ export function BuildHistory({ builds }: { builds: BuildSummary[] }) {
 							</>
 						)}
 						{!build.ref && "archive"}
+						{build.provider && ` · ${PROVIDER[build.provider]}`}
 					</span>
 					<span>
 						<Label>{RESULT[build.status]}</Label>

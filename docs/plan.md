@@ -977,6 +977,48 @@ Buildpacks (Paketo), as architecture section 8.3 plans.
 into cultures, under the same limits and network rules as Dockerfile
 builds.
 
+**Spike** (November 2026; the owner chose to build it this way):
+buildpacks run inside BuildKit, without a Docker daemon and without
+`creator`. `creator` needs a daemon, a registry or an OCI layout of the
+run image to export to; instead, petri. builds a two-stage Dockerfile
+of its own like any other:
+
+1.  In Paketo's builder (`paketobuildpacks/ubuntu-noble-builder`), as
+    its `cnb` user: copy the source to `/workspace`, run the lifecycle's
+    `detector` and `builder`, and keep only the layers marked
+    `launch = true`.
+2.  On the matching run image (`paketobuildpacks/ubuntu-noble-run`):
+    copy `/layers`, `/workspace` and the lifecycle's `launcher`, with
+    `/cnb/process/<type>` links to it, as the exporter makes them; the
+    entrypoint runs the default process; `ENV PORT` and `EXPOSE` give
+    the port.
+
+The result is a Docker image archive, loaded as now. On the dev
+machine, a Node.js app (npm, no Dockerfile) and a Python app (pip,
+Procfile with gunicorn) each built in about 14 seconds once the builder
+was pulled (about 50 seconds the first time). Both answered on `$PORT`
+under the app limits (512 MB, one CPU, capabilities dropped). Both
+images are about 590 MB. The runtime, the network rules and the time
+limit stay as they are. Compared with `pack`: no buildpack cache
+between builds (each build installs Node, Python and the packages
+again), no SBOM, and no rebase metadata (petri. never rebases).
+
+**Decided** (building it): the Dockerfile is a file,
+`packages/build-engine/buildpacks/Dockerfile`, with builder and run
+image pinned and updated together by Dependabot. `build.args` become
+the buildpacks' settings (`/platform/env`, e.g. `BP_NODE_VERSION`), so
+they stay out of the image; `PORT` is a build argument. `auto` refuses
+a Dockerfile that is a link or a directory rather than skipping it;
+`dockerfile` without one fails as before. The build log starts with the
+choice ("No Dockerfile: building with buildpacks (Paketo)"), the build
+records it (`provider`, also in the API's `latestBuild` and its
+`ETag`), and the build history shows it. Two failures get their own
+message instead of the failed step: no buildpack recognizes the source,
+and no start command, which includes a Python app without a Procfile
+(Paketo would start a bare `python`, which exits at once). The
+culture form chooses the strategy. Integration tests build a Node.js
+and a Python app into cultures that answer through the edge proxy.
+
 ### Not in this phase
 
 -   Runtime environment variables (architecture 8.3): apps that need

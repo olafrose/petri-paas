@@ -49,16 +49,18 @@ export const gitSource = z
 	})
 	.strict();
 
+export const buildStrategy = z.enum(["auto", "dockerfile", "buildpacks"]).meta({
+	description:
+		"`auto` builds the Dockerfile if the build directory has one, else with buildpacks (Paketo: Node.js, Python, Go, Java, Ruby, PHP, .NET); `dockerfile` or `buildpacks` insists on one",
+});
+
 export const buildSettings = z
 	.object({
-		strategy: z.enum(["auto", "dockerfile"]).default("auto"),
-		port: z
-			.number()
-			.int()
-			.min(1)
-			.max(65535)
-			.optional()
-			.meta({ description: "HTTP port the app listens on" }),
+		strategy: buildStrategy.default("auto"),
+		port: z.number().int().min(1).max(65535).optional().meta({
+			description:
+				"HTTP port the app listens on. Dockerfile builds default to the first `EXPOSE`d port; buildpack builds set `PORT` to it, 8080 by default.",
+		}),
 		args: z
 			.record(
 				z.string().regex(/^[A-Za-z_][A-Za-z0-9_]*$/),
@@ -67,7 +69,7 @@ export const buildSettings = z
 			.default({})
 			.meta({
 				description:
-					"Build arguments. Stored in the image: never use for secrets.",
+					"Build arguments: for a Dockerfile, stored in the image, so never use them for secrets; for buildpacks, their settings (e.g. `BP_NODE_VERSION`).",
 			}),
 	})
 	.strict();
@@ -167,6 +169,10 @@ export const buildSummary = z
 			.nullable()
 			.meta({ description: "Git branch, tag or commit asked for" }),
 		commit: z.string().nullable().meta({ description: "Git commit built" }),
+		provider: z.enum(["dockerfile", "buildpack"]).nullable().meta({
+			description:
+				"What builds it: the Dockerfile or buildpacks. Null until the build has chosen (see `build.strategy`).",
+		}),
 		createdAt: z.iso.datetime(),
 		startedAt: z.iso.datetime().nullable(),
 		finishedAt: z.iso.datetime().nullable(),
@@ -237,7 +243,7 @@ export const deployment = z
 		status: deploymentStatus,
 		source: deploymentSource,
 		build: z.object({
-			strategy: z.enum(["auto", "dockerfile"]),
+			strategy: buildStrategy,
 			port: z.number().int().nullable(),
 			args: z.record(z.string(), z.string()),
 		}),
